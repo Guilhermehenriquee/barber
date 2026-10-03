@@ -1,8 +1,8 @@
-# vinext-starter
+# Rosa do Corte
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Sistema web multi-barbearia para login por papel, cadastros e agenda real.
+O app roda com [vinext](https://github.com/cloudflare/vinext), APIs server-side,
+Drizzle e banco D1/SQLite.
 
 ## Prerequisites
 
@@ -12,18 +12,30 @@ Drizzle support.
 
 ```bash
 npm install
+npm run db:generate
 npm run dev
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+## Deploy no Render
 
-## Included Shape
+Este projeto **nao e Static Site**. Ele tem backend, rotas API e banco, entao no
+Render deve ser criado como **Web Service**.
+
+Configuracao recomendada:
+
+- Build command: `npm ci && npm run build`
+- Start command: `npm run start:render`
+- Node: `22.13.0`
+
+O arquivo `render.yaml` ja declara essa configuracao como Web Service.
+
+## Estrutura
 
 - edit site code under `app/`
 - `.openai/hosting.json` declares optional Sites D1 and R2 bindings
 - `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
+- `db/schema.ts` contains the multi-barbearia schema
 - `examples/d1/` contains an optional D1 example surface
 - `drizzle.config.ts` supports local migration generation when needed
 
@@ -91,8 +103,9 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
+- `npm test`: build and verify the rendered app shell
 - `npm run db:generate`: generate Drizzle migrations after schema changes
+- `npm run start:render`: start the production server on Render
 
 ## Learn More
 

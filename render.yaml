@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: barber
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:render
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22.13.0
