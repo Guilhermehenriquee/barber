@@ -384,8 +384,8 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Fase 1: agenda real + login + multi-barbearia</p>
-            <h1>Operacao isolada por barbearia, com agenda validada no banco.</h1>
+            <p className="eyebrow">Rosa do Corte OS</p>
+            <h1>Agenda, equipe e clientes em um painel simples de tocar.</h1>
           </div>
           <div className="topbar-actions">
             <input className="compact-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
@@ -407,11 +407,11 @@ export default function Home() {
         {section === "login" && (
           <section className="screen login-screen" aria-labelledby="login-title">
             <div className="login-copy">
-              <p className="eyebrow">Login real de piloto</p>
-              <h2 id="login-title">Entre por barbearia, e-mail e senha.</h2>
+              <p className="eyebrow">Acesso seguro</p>
+              <h2 id="login-title">Entre e assuma sua cadeira.</h2>
               <p>
-                A sessao fica em cookie seguro e cada usuario carrega apenas os dados da barbearia
-                vinculada ao seu papel.
+                Cada pessoa entra no seu papel: dono, barbeiro, recepcao ou cliente. O painel abre
+                direto na rotina certa para aquela barbearia.
               </p>
               <div className="login-proof">
                 <span>Slug</span>
@@ -458,11 +458,11 @@ export default function Home() {
           <section className="screen" aria-labelledby="home-title">
             <div className="hero-band compact-hero">
               <div className="hero-content">
-                <p className="eyebrow">Painel operacional</p>
-                <h2 id="home-title">Agenda do dia com dados da {workspace.shop?.name ?? "barbearia"}.</h2>
+                <p className="eyebrow">Hoje na barbearia</p>
+                <h2 id="home-title">Tudo pronto para manter a casa girando.</h2>
                 <p>
-                  Esta tela ja respeita login, papel do usuario e isolamento por barbearia. Dono e recepcao
-                  veem a operacao completa; barbeiro ve a propria cadeira; cliente ve seus horarios.
+                  Veja os proximos atendimentos, acompanhe a equipe e abra horarios livres sem
+                  perder o controle da agenda.
                 </p>
               </div>
               <div className="system-card">
@@ -503,13 +503,13 @@ export default function Home() {
               </article>
               <article className="panel">
                 <div className="panel-heading">
-                  <span>Isolamento multi-barbearia</span>
+                  <span>Conta da barbearia</span>
                   <span className="pill">{workspace.shop?.slug ?? slug}</span>
                 </div>
                 <ul className="clean-list">
-                  <li>Todas as consultas usam o ID da barbearia da sessao.</li>
-                  <li>Usuarios carregam apenas dados do proprio slug.</li>
-                  <li>A agenda grava conflitos no banco e rejeita horario ocupado.</li>
+                  <li>Dados, equipe e clientes ficam separados por unidade.</li>
+                  <li>Cada papel enxerga somente o que precisa operar.</li>
+                  <li>Horarios ocupados saem da lista automaticamente.</li>
                 </ul>
               </article>
             </div>
@@ -520,8 +520,8 @@ export default function Home() {
           <section className="screen" aria-labelledby="agenda-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Agenda real</p>
-                <h2 id="agenda-title">Horarios livres calculados por servico, profissional e expediente.</h2>
+                <p className="eyebrow">Agenda inteligente</p>
+                <h2 id="agenda-title">Escolha servico, profissional e confirme sem conflito.</h2>
               </div>
               <button className="primary-button" type="button" onClick={() => void loadAvailability()}>
                 Recalcular
@@ -635,8 +635,8 @@ export default function Home() {
           <section className="screen" aria-labelledby="catalog-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Cadastros</p>
-                <h2 id="catalog-title">Clientes, profissionais, servicos e horarios da barbearia.</h2>
+                <p className="eyebrow">Base da casa</p>
+                <h2 id="catalog-title">Cadastre clientes, profissionais, servicos e expedientes.</h2>
               </div>
               <span className="pill strong">{canManageCatalog ? "Admin" : canManageAgenda ? "Agenda" : "Leitura"}</span>
             </div>
@@ -687,8 +687,8 @@ export default function Home() {
           <section className="screen" aria-labelledby="client-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Area do cliente</p>
-                <h2 id="client-title">Proximos horarios e historico basico.</h2>
+                <p className="eyebrow">Minha barbearia</p>
+                <h2 id="client-title">Proximos horarios, contato e historico em um lugar.</h2>
               </div>
               <span className="pill strong">{user ? roleLabels[user.role] : "Sem login"}</span>
             </div>
