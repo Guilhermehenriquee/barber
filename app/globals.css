@@ -321,6 +321,50 @@ button {
   width: 100%;
 }
 
+.compact-input {
+  min-height: 2.75rem;
+  width: 10.5rem;
+}
+
+.notice {
+  background: rgba(215, 169, 74, 0.12);
+  border: 1px solid rgba(215, 169, 74, 0.32);
+  border-radius: 8px;
+  color: #ffe0a3;
+  line-height: 1.5;
+  padding: 0.85rem 1rem;
+}
+
+.notice.muted {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.compact-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.34fr);
+}
+
+.system-card {
+  align-self: stretch;
+  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+}
+
+.system-card span,
+.system-card small {
+  color: var(--muted);
+}
+
+.system-card strong {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  line-height: 1.05;
+}
+
 .metrics-grid,
 .plans-grid,
 .benefit-grid {
@@ -483,7 +527,14 @@ select {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--line);
   color: var(--paper);
+  display: grid;
+  gap: 0.1rem;
   min-width: 0;
+}
+
+.time-slot small {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .time-slot.active {
@@ -513,7 +564,7 @@ select {
   align-items: center;
   display: grid;
   gap: 1rem;
-  grid-template-columns: 4rem minmax(0, 1fr) 3.5rem 7rem;
+  grid-template-columns: 4rem minmax(0, 1fr) 8rem 10rem;
   min-height: 5.5rem;
   padding: 0.8rem;
 }
@@ -537,6 +588,30 @@ select {
   justify-content: center;
   min-height: 2rem;
   padding: 0 0.65rem;
+}
+
+.status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.status-actions button,
+.segmented button,
+.credential-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--paper);
+  min-height: 2.25rem;
+  padding: 0 0.65rem;
+}
+
+.status-actions button:hover,
+.segmented button:hover,
+.credential-card:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .pill.strong {
@@ -684,6 +759,72 @@ dd {
   gap: 1rem;
 }
 
+.credential-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.credential-card {
+  align-items: start;
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.credential-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.inline-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.empty-state {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.catalog-layout {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 0.28fr) minmax(18rem, 0.42fr) minmax(18rem, 0.3fr);
+}
+
+.segmented {
+  background: rgba(25, 24, 23, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem;
+}
+
+.segmented button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.segmented button.active {
+  background: rgba(215, 169, 74, 0.14);
+  border-color: rgba(215, 169, 74, 0.32);
+  color: #ffe0a3;
+}
+
+.segmented button:disabled,
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .login-proof {
   align-items: center;
   background: rgba(255, 255, 255, 0.08);
@@ -735,7 +876,9 @@ dd {
   .split-grid,
   .booking-grid,
   .club-layout,
-  .profile-grid {
+  .profile-grid,
+  .compact-hero,
+  .catalog-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -787,5 +930,10 @@ dd {
 
   .time-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .credential-grid,
+  .inline-grid {
+    grid-template-columns: 1fr;
   }
 }

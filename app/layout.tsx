@@ -3,7 +3,7 @@ import "./globals.css";
 
 const title = "Rosa do Corte | Clube & Agenda";
 const description =
-  "Sistema web para barbearia por assinatura com login, planos, agenda, clube da barba e perfil do cliente.";
+  "Sistema web multi-barbearia com login por papel, banco isolado, agenda real, cadastros e area do cliente.";
 
 export const metadata: Metadata = {
   title,
