@@ -31,6 +31,9 @@ export const users = sqliteTable(
     role: text("role", { enum: ["owner", "admin", "barber", "reception", "client"] }).notNull(),
     passwordSalt: text("password_salt").notNull(),
     passwordHash: text("password_hash").notNull(),
+    twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).notNull().default(true),
+    twoFactorChannel: text("two_factor_channel", { enum: ["email"] }).notNull().default("email"),
+    googleSub: text("google_sub"),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -52,6 +55,24 @@ export const authSessions = sqliteTable(
   (table) => ({
     tokenHashUnique: uniqueIndex("idx_auth_sessions_token_hash_unique").on(table.tokenHash),
     userIdx: index("idx_auth_sessions_user").on(table.userId),
+  }),
+);
+
+export const authChallenges = sqliteTable(
+  "auth_challenges",
+  {
+    id: text("id").primaryKey(),
+    barberShopId: text("barber_shop_id").notNull(),
+    userId: text("user_id").notNull(),
+    purpose: text("purpose", { enum: ["login", "register", "google"] }).notNull(),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    consumedAt: text("consumed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    userIdx: index("idx_auth_challenges_user").on(table.userId),
+    expiresIdx: index("idx_auth_challenges_expires").on(table.expiresAt),
   }),
 );
 

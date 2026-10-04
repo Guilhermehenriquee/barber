@@ -34,6 +34,8 @@ test("server-renders the Rosa do Corte app shell", async () => {
   assert.match(html, /Rosa do Corte no ritmo certo/);
   assert.match(html, /Idioma/);
   assert.match(html, /Português/);
+  assert.match(html, /Inscrever-se/);
+  assert.match(html, /verificação em duas etapas/);
   assert.match(html, /Clientes/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton|codex-preview/i);
 });

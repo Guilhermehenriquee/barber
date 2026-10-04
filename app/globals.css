@@ -954,6 +954,102 @@ dd {
   gap: 1rem;
 }
 
+.auth-form,
+.two-factor-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.auth-switch {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.35rem;
+}
+
+.auth-switch button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  font-weight: 850;
+  min-height: 2.35rem;
+}
+
+.auth-switch button.active {
+  background: var(--wine);
+  color: #ffffff;
+}
+
+.google-button {
+  align-items: center;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: inline-flex;
+  font-weight: 850;
+  gap: 0.6rem;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+}
+
+.google-button span {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--wine);
+  display: inline-flex;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 900;
+  height: 1.55rem;
+  justify-content: center;
+  width: 1.55rem;
+}
+
+.auth-hint,
+.two-factor-card p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.two-factor-card h3 {
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.dev-code {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px dashed var(--rose-strong);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0.8rem;
+}
+
+.dev-code span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.dev-code strong {
+  color: var(--wine);
+  font-size: 1.3rem;
+  letter-spacing: 0.08rem;
+}
+
 .credential-grid {
   display: grid;
   gap: 0.5rem;

@@ -12,16 +12,8 @@ export async function POST(request: Request) {
       return jsonError("Informe barbearia, e-mail e senha.", 400);
     }
 
-    const session = await loginWithPassword(payload.slug, payload.email, payload.password, request.url);
-    return Response.json(
-      { user: session.user },
-      {
-        status: 200,
-        headers: {
-          "Set-Cookie": session.cookie,
-        },
-      },
-    );
+    const pending = await loginWithPassword(payload.slug, payload.email, payload.password);
+    return Response.json(pending, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao entrar.";
     return jsonError(message, 401);

@@ -103,7 +103,20 @@ export type AvailabilitySlot = {
   label: string;
 };
 
-const SESSION_COOKIE = "rosa_session";
+export type TwoFactorChallenge = {
+  challengeId: string;
+  expiresAt: string;
+  channel: "email";
+  deliveryTarget: string;
+  devCode: string;
+};
+
+export type PendingAuth = {
+  requiresTwoFactor: true;
+  challenge: TwoFactorChallenge;
+};
+
+const SESSION_COOKIE = "rosa_session_v2";
 const SAO_PAULO_OFFSET = "-03:00";
 const encoder = new TextEncoder();
 
@@ -127,8 +140,42 @@ export function canManageCatalog(role: UserRole) {
   return role === "owner" || role === "admin";
 }
 
+async function ensureAuthSchema(db: D1Database) {
+  await runBestEffort(db, "alter table users add column two_factor_enabled integer not null default 1");
+  await runBestEffort(db, "alter table users add column two_factor_channel text not null default 'email'");
+  await runBestEffort(db, "alter table users add column google_sub text");
+  await db
+    .prepare(
+      `create table if not exists auth_challenges (
+        id text primary key,
+        barber_shop_id text not null,
+        user_id text not null,
+        purpose text not null,
+        code_hash text not null,
+        expires_at text not null,
+        consumed_at text,
+        created_at text not null default CURRENT_TIMESTAMP
+      )`,
+    )
+    .run();
+  await runBestEffort(db, "create index if not exists idx_auth_challenges_user on auth_challenges (user_id)");
+  await runBestEffort(db, "create index if not exists idx_auth_challenges_expires on auth_challenges (expires_at)");
+}
+
+async function runBestEffort(db: D1Database, statement: string) {
+  try {
+    await db.prepare(statement).run();
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (!message.includes("duplicate column") && !message.includes("already exists") && !message.includes("no such table")) {
+      throw error;
+    }
+  }
+}
+
 export async function ensureSeedData() {
   const db = getDb();
+  await ensureAuthSchema(db);
   const existing = await db
     .prepare("select id from barber_shops where slug = ? limit 1")
     .bind("rosa-do-corte")
@@ -349,7 +396,7 @@ function appointmentSeedStatement(
     .bind(id, "shop_rosa", clientId, professionalId, serviceId, startsAt, endsAt, status, null, source, "user_admin_rosa");
 }
 
-export async function loginWithPassword(slug: string, email: string, password: string, requestUrl: string) {
+export async function loginWithPassword(slug: string, email: string, password: string): Promise<PendingAuth> {
   await ensureSeedData();
   const normalizedEmail = email.trim().toLowerCase();
   const shop = await findShopBySlug(slug);
@@ -381,17 +428,152 @@ export async function loginWithPassword(slug: string, email: string, password: s
     throw new Error("E-mail ou senha invalidos.");
   }
 
-  const token = createToken();
-  const tokenHash = await sha256Hex(token);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
-  await getDb()
-    .prepare("insert into auth_sessions (id, user_id, token_hash, expires_at) values (?, ?, ?, ?)")
-    .bind(createId("session"), user.id, tokenHash, expiresAt)
-    .run();
+  return {
+    requiresTwoFactor: true,
+    challenge: await createTwoFactorChallenge(user.id, user.barber_shop_id, user.email, "login"),
+  };
+}
+
+export async function registerClientAccount(payload: {
+  slug: string;
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}): Promise<PendingAuth> {
+  await ensureSeedData();
+  const shop = await findShopBySlug(payload.slug);
+  if (!shop) throw new Error("Barbearia nao encontrada.");
+
+  const name = payload.name.trim();
+  const email = payload.email.trim().toLowerCase();
+  const phone = payload.phone.trim();
+  const password = payload.password.trim();
+
+  if (!name || !email || !phone || !password) {
+    throw new Error("Informe nome, e-mail, WhatsApp e senha.");
+  }
+  if (password.length < 8) {
+    throw new Error("Use uma senha com pelo menos 8 caracteres.");
+  }
+
+  const existing = await getDb()
+    .prepare("select id from users where barber_shop_id = ? and lower(email) = ? limit 1")
+    .bind(shop.id, email)
+    .first<{ id: string }>();
+  if (existing) {
+    throw new Error("Ja existe uma conta com este e-mail nesta barbearia.");
+  }
+
+  const userId = createId("user");
+  const clientId = createId("client");
+  const salt = createToken();
+  const passwordHash = await hashPassword(password, salt);
+
+  await getDb().batch([
+    getDb()
+      .prepare(
+        `insert into users
+         (id, barber_shop_id, name, email, phone, role, password_salt, password_hash, active, two_factor_enabled, two_factor_channel)
+         values (?, ?, ?, ?, ?, 'client', ?, ?, 1, 1, 'email')`,
+      )
+      .bind(userId, shop.id, name, email, phone, salt, passwordHash),
+    getDb()
+      .prepare(
+        `insert into clients (id, barber_shop_id, user_id, name, phone, email, notes, preferences, active)
+         values (?, ?, ?, ?, ?, ?, ?, null, 1)`,
+      )
+      .bind(clientId, shop.id, userId, name, phone, email, "Criado pelo cadastro do cliente."),
+  ]);
 
   return {
-    user: normalizeSessionUser(user),
-    cookie: sessionCookie(token, requestUrl),
+    requiresTwoFactor: true,
+    challenge: await createTwoFactorChallenge(userId, shop.id, email, "register"),
+  };
+}
+
+export async function verifyTwoFactorChallenge(challengeId: string, code: string, requestUrl: string) {
+  await ensureSeedData();
+  const normalizedCode = code.trim();
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    throw new Error("Informe o codigo de 6 digitos.");
+  }
+
+  const row = await getDb()
+    .prepare(
+      `select c.id, c.user_id, c.code_hash, c.expires_at, c.consumed_at,
+              u.id as id, u.barber_shop_id, u.name, u.email, u.phone, u.role,
+              b.slug as barber_shop_slug, b.name as barber_shop_name
+       from auth_challenges c
+       join users u on u.id = c.user_id
+       join barber_shops b on b.id = u.barber_shop_id
+       where c.id = ? and u.active = 1 and b.active = 1
+       limit 1`,
+    )
+    .bind(challengeId)
+    .first<
+      SessionUser & {
+        code_hash: string;
+        expires_at: string;
+        consumed_at: string | null;
+        user_id: string;
+        barber_shop_id: string;
+        barber_shop_slug: string;
+        barber_shop_name: string;
+      }
+    >();
+
+  if (!row) throw new Error("Verificacao nao encontrada.");
+  if (row.consumed_at) throw new Error("Este codigo ja foi usado.");
+  if (Date.parse(row.expires_at) <= Date.now()) throw new Error("Codigo expirado. Entre novamente.");
+
+  const attemptedHash = await sha256Hex(`${challengeId}:${normalizedCode}`);
+  if (!timingSafeEqual(attemptedHash, row.code_hash)) {
+    throw new Error("Codigo 2FA invalido.");
+  }
+
+  await getDb()
+    .prepare("update auth_challenges set consumed_at = ? where id = ?")
+    .bind(new Date().toISOString(), challengeId)
+    .run();
+
+  const session = await issueSession(row.user_id, requestUrl);
+  return session;
+}
+
+export function getGoogleAuthStart(slug: string, mode: "login" | "register", requestUrl: string) {
+  const googleEnv = env as { GOOGLE_CLIENT_ID?: string; GOOGLE_REDIRECT_URI?: string };
+  const clientId = googleEnv.GOOGLE_CLIENT_ID;
+  const redirectUri = googleEnv.GOOGLE_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    return {
+      configured: false as const,
+      message:
+        "Login com Google preparado. Configure GOOGLE_CLIENT_ID e GOOGLE_REDIRECT_URI no ambiente para ativar o OAuth real.",
+    };
+  }
+
+  const state = base64UrlString(
+    JSON.stringify({
+      slug,
+      mode,
+      next: new URL(requestUrl).origin,
+      nonce: createToken().slice(0, 18),
+    }),
+  );
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    prompt: "select_account",
+    state,
+  });
+
+  return {
+    configured: true as const,
+    url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
   };
 }
 
@@ -955,6 +1137,84 @@ function sessionCookie(token: string, requestUrl: string) {
   return `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}${secure}`;
 }
 
+async function issueSession(userId: string, requestUrl: string) {
+  const user = await getDb()
+    .prepare(
+      `select u.id, u.barber_shop_id, u.name, u.email, u.phone, u.role,
+              b.slug as barber_shop_slug, b.name as barber_shop_name
+       from users u
+       join barber_shops b on b.id = u.barber_shop_id
+       where u.id = ? and u.active = 1 and b.active = 1
+       limit 1`,
+    )
+    .bind(userId)
+    .first<SessionUser & { barber_shop_id: string; barber_shop_slug: string; barber_shop_name: string }>();
+  if (!user) throw new Error("Conta indisponivel.");
+
+  const token = createToken();
+  const tokenHash = await sha256Hex(token);
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
+  await getDb()
+    .prepare("insert into auth_sessions (id, user_id, token_hash, expires_at) values (?, ?, ?, ?)")
+    .bind(createId("session"), user.id, tokenHash, expiresAt)
+    .run();
+
+  return {
+    user: normalizeSessionUser(user),
+    cookie: sessionCookie(token, requestUrl),
+  };
+}
+
+async function createTwoFactorChallenge(
+  userId: string,
+  barberShopId: string,
+  email: string,
+  purpose: "login" | "register" | "google",
+): Promise<TwoFactorChallenge> {
+  const challengeId = createId("2fa");
+  const code = createSixDigitCode();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 10).toISOString();
+
+  await getDb()
+    .prepare(
+      `update auth_challenges
+       set consumed_at = ?
+       where user_id = ? and consumed_at is null`,
+    )
+    .bind(new Date().toISOString(), userId)
+    .run();
+
+  await getDb()
+    .prepare(
+      `insert into auth_challenges
+       (id, barber_shop_id, user_id, purpose, code_hash, expires_at, consumed_at)
+       values (?, ?, ?, ?, ?, ?, null)`,
+    )
+    .bind(challengeId, barberShopId, userId, purpose, await sha256Hex(`${challengeId}:${code}`), expiresAt)
+    .run();
+
+  return {
+    challengeId,
+    expiresAt,
+    channel: "email",
+    deliveryTarget: maskEmail(email),
+    devCode: code,
+  };
+}
+
+function createSixDigitCode() {
+  const value = new Uint32Array(1);
+  crypto.getRandomValues(value);
+  return String(value[0] % 1_000_000).padStart(6, "0");
+}
+
+function maskEmail(email: string) {
+  const [name, domain] = email.split("@");
+  if (!domain) return email;
+  const visible = name.slice(0, 2);
+  return `${visible}${"*".repeat(Math.max(2, name.length - visible.length))}@${domain}`;
+}
+
 function createToken() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -1004,6 +1264,10 @@ function base64Url(bytes: Uint8Array) {
     binary += String.fromCharCode(byte);
   });
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function base64UrlString(value: string) {
+  return btoa(value).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 export function todayInSaoPaulo() {

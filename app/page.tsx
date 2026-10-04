@@ -7,6 +7,15 @@ type UserRole = "owner" | "admin" | "barber" | "reception" | "client";
 type AppointmentStatus = "scheduled" | "confirmed" | "in_service" | "completed" | "no_show" | "cancelled";
 type Locale = "pt-BR" | "en-US";
 type CatalogTab = "client" | "service" | "professional" | "hours";
+type AuthMode = "login" | "register";
+
+type PendingChallenge = {
+  challengeId: string;
+  expiresAt: string;
+  channel: "email";
+  deliveryTarget: string;
+  devCode: string;
+};
 
 type User = {
   id: string;
@@ -173,14 +182,33 @@ const copy = {
     },
     login: {
       eyebrow: "Acesso seguro",
-      title: "Entre na barbearia.",
+      title: "Entre ou crie sua conta.",
       description:
-        "Dono, barbeiro, recepção e cliente entram com permissões separadas. Cada barbearia usa seu próprio slug, tema, equipe, clientes e agenda.",
+        "Todas as contas usam senha e verificação em duas etapas antes de abrir a agenda. O cadastro cria uma conta de cliente na barbearia escolhida.",
+      tabLogin: "Fazer login",
+      tabRegister: "Inscrever-se",
       slug: "Slug da barbearia",
       slugBadge: "Slug",
+      name: "Nome completo",
+      phone: "WhatsApp",
       email: "E-mail",
       password: "Senha",
+      confirmPassword: "Confirmar senha",
       submit: "Acessar",
+      registerSubmit: "Criar conta",
+      googleSubmit: "Inscrever-se com Google",
+      googleHint: "O Google OAuth fica disponível assim que as credenciais forem configuradas no ambiente.",
+      demoAccess: "Acessos de demonstração",
+    },
+    twoFactor: {
+      eyebrow: "Verificação 2FA",
+      title: "Confirme o código para entrar.",
+      description: "Enviamos um código para",
+      code: "Código de 6 dígitos",
+      submit: "Verificar e entrar",
+      back: "Trocar conta",
+      devCode: "Código de demonstração",
+      sent: "Código 2FA gerado. Confirme para concluir o acesso.",
     },
     home: {
       newAppointment: "Novo agendamento",
@@ -269,6 +297,9 @@ const copy = {
       loadFail: "Falha ao carregar dados.",
       availabilityFail: "Falha ao calcular horários.",
       invalidLogin: "Login inválido.",
+      passwordMismatch: "As senhas não conferem.",
+      registerFail: "Falha ao criar conta.",
+      googleStartFail: "Falha ao iniciar Google.",
       chooseSlot: "Escolha um horário livre.",
       appointmentFail: "Falha ao agendar.",
       appointmentOk: "Horário agendado com sucesso.",
@@ -331,14 +362,33 @@ const copy = {
     },
     login: {
       eyebrow: "Secure access",
-      title: "Step into the shop.",
+      title: "Sign in or create an account.",
       description:
-        "Owners, barbers, front desk and clients sign in with separate permissions. Each barbershop keeps its own slug, theme, team, clients and calendar.",
+        "Every account uses a password and two-step verification before opening the schedule. Registration creates a client account in the selected barbershop.",
+      tabLogin: "Sign in",
+      tabRegister: "Sign up",
       slug: "Barbershop slug",
       slugBadge: "Slug",
+      name: "Full name",
+      phone: "WhatsApp",
       email: "Email",
       password: "Password",
+      confirmPassword: "Confirm password",
       submit: "Sign in",
+      registerSubmit: "Create account",
+      googleSubmit: "Sign up with Google",
+      googleHint: "Google OAuth becomes available as soon as credentials are configured in the environment.",
+      demoAccess: "Demo access",
+    },
+    twoFactor: {
+      eyebrow: "2FA verification",
+      title: "Confirm the code to continue.",
+      description: "We sent a code to",
+      code: "6-digit code",
+      submit: "Verify and enter",
+      back: "Use another account",
+      devCode: "Demo code",
+      sent: "2FA code generated. Confirm it to finish access.",
     },
     home: {
       newAppointment: "New appointment",
@@ -427,6 +477,9 @@ const copy = {
       loadFail: "Could not load data.",
       availabilityFail: "Could not calculate available times.",
       invalidLogin: "Invalid login.",
+      passwordMismatch: "Passwords do not match.",
+      registerFail: "Could not create account.",
+      googleStartFail: "Could not start Google.",
       chooseSlot: "Choose an open time.",
       appointmentFail: "Could not book.",
       appointmentOk: "Appointment booked successfully.",
@@ -462,8 +515,17 @@ export default function Home() {
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authBusy, setAuthBusy] = useState(false);
   const [loginEmail, setLoginEmail] = useState("admin@rosadocorte.com.br");
   const [loginPassword, setLoginPassword] = useState("rosa-admin");
+  const [registerName, setRegisterName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [pendingChallenge, setPendingChallenge] = useState<PendingChallenge | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedProfessionalId, setSelectedProfessionalId] = useState("any");
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -548,19 +610,111 @@ export default function Home() {
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, email: loginEmail, password: loginPassword }),
-    });
-    const data = (await response.json()) as { user?: User; error?: string };
-    if (!response.ok) {
-      setMessage(data.error || t.messages.invalidLogin);
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, email: loginEmail, password: loginPassword }),
+      });
+      const data = (await response.json()) as { challenge?: PendingChallenge; error?: string };
+      if (!response.ok || !data.challenge) {
+        setMessage(data.error || t.messages.invalidLogin);
+        return;
+      }
+      setPendingChallenge(data.challenge);
+      setTwoFactorCode("");
+      setMessage(t.twoFactor.sent);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    if (registerPassword !== registerConfirmPassword) {
+      setMessage(t.messages.passwordMismatch);
       return;
     }
-    setWorkspace((current) => ({ ...current, user: data.user ?? null }));
-    setSection("inicio");
-    await loadWorkspace();
+
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug,
+          name: registerName,
+          email: registerEmail,
+          phone: registerPhone,
+          password: registerPassword,
+        }),
+      });
+      const data = (await response.json()) as { challenge?: PendingChallenge; error?: string };
+      if (!response.ok || !data.challenge) {
+        setMessage(data.error || t.messages.registerFail);
+        return;
+      }
+      setPendingChallenge(data.challenge);
+      setTwoFactorCode("");
+      setMessage(t.twoFactor.sent);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleVerifyTwoFactor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!pendingChallenge) return;
+
+    setMessage("");
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/auth/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId: pendingChallenge.challengeId, code: twoFactorCode }),
+      });
+      const data = (await response.json()) as { user?: User; error?: string };
+      if (!response.ok || !data.user) {
+        setMessage(data.error || t.messages.invalidLogin);
+        return;
+      }
+      setWorkspace((current) => ({ ...current, user: data.user ?? null }));
+      setPendingChallenge(null);
+      setTwoFactorCode("");
+      setRegisterPassword("");
+      setRegisterConfirmPassword("");
+      setSection("inicio");
+      await loadWorkspace();
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleGoogleStart() {
+    setMessage("");
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/auth/google/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, mode: authMode }),
+      });
+      const data = (await response.json()) as { configured?: boolean; url?: string; message?: string; error?: string };
+      if (!response.ok) {
+        setMessage(data.error || t.messages.googleStartFail);
+        return;
+      }
+      if (data.configured && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setMessage(data.message || t.login.googleHint);
+    } finally {
+      setAuthBusy(false);
+    }
   }
 
   async function handleLogout() {
@@ -737,39 +891,161 @@ export default function Home() {
                 <strong>{slug}</strong>
               </div>
             </div>
-            <form className="login-form" onSubmit={handleLogin}>
-              <label>
-                {t.login.slug}
-                <input value={slug} onChange={(event) => setSlug(event.target.value)} />
-              </label>
-              <label>
-                {t.login.email}
-                <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} type="email" />
-              </label>
-              <label>
-                {t.login.password}
-                <input value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} type="password" />
-              </label>
-              <button className="primary-button wide" type="submit">
-                {t.login.submit}
-              </button>
-              <div className="credential-grid">
-                {seedLogins.map(({ role, email, password }) => (
+            <div className="login-form">
+              {!pendingChallenge && (
+                <div className="auth-switch" role="tablist" aria-label={t.login.eyebrow}>
                   <button
-                    className="credential-card"
-                    key={email}
+                    aria-selected={authMode === "login"}
+                    className={authMode === "login" ? "active" : ""}
+                    onClick={() => {
+                      setAuthMode("login");
+                      setPendingChallenge(null);
+                      setMessage("");
+                    }}
+                    role="tab"
+                    type="button"
+                  >
+                    {t.login.tabLogin}
+                  </button>
+                  <button
+                    aria-selected={authMode === "register"}
+                    className={authMode === "register" ? "active" : ""}
+                    onClick={() => {
+                      setAuthMode("register");
+                      setPendingChallenge(null);
+                      setMessage("");
+                    }}
+                    role="tab"
+                    type="button"
+                  >
+                    {t.login.tabRegister}
+                  </button>
+                </div>
+              )}
+
+              {pendingChallenge ? (
+                <form className="two-factor-card" onSubmit={handleVerifyTwoFactor}>
+                  <div>
+                    <p className="eyebrow">{t.twoFactor.eyebrow}</p>
+                    <h3>{t.twoFactor.title}</h3>
+                    <p>
+                      {t.twoFactor.description} <strong>{pendingChallenge.deliveryTarget}</strong>.
+                    </p>
+                  </div>
+                  <label>
+                    {t.twoFactor.code}
+                    <input
+                      inputMode="numeric"
+                      maxLength={6}
+                      pattern="[0-9]{6}"
+                      value={twoFactorCode}
+                      onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    />
+                  </label>
+                  <div className="dev-code">
+                    <span>{t.twoFactor.devCode}</span>
+                    <strong>{pendingChallenge.devCode}</strong>
+                  </div>
+                  <button className="primary-button wide" type="submit" disabled={authBusy || twoFactorCode.length !== 6}>
+                    {t.twoFactor.submit}
+                  </button>
+                  <button
+                    className="ghost-button wide"
                     type="button"
                     onClick={() => {
-                      setLoginEmail(email);
-                      setLoginPassword(password);
+                      setPendingChallenge(null);
+                      setTwoFactorCode("");
+                      setMessage("");
                     }}
                   >
-                    <strong>{t.seedRoles[role]}</strong>
-                    <span>{email}</span>
+                    {t.twoFactor.back}
                   </button>
-                ))}
-              </div>
-            </form>
+                </form>
+              ) : authMode === "login" ? (
+                <form className="auth-form" onSubmit={handleLogin}>
+                  <label>
+                    {t.login.slug}
+                    <input value={slug} onChange={(event) => setSlug(event.target.value)} />
+                  </label>
+                  <label>
+                    {t.login.email}
+                    <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} type="email" />
+                  </label>
+                  <label>
+                    {t.login.password}
+                    <input value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} type="password" />
+                  </label>
+                  <button className="primary-button wide" type="submit" disabled={authBusy}>
+                    {t.login.submit}
+                  </button>
+                  <div className="credential-grid" aria-label={t.login.demoAccess}>
+                    {seedLogins.map(({ role, email, password }) => (
+                      <button
+                        className="credential-card"
+                        key={email}
+                        type="button"
+                        onClick={() => {
+                          setLoginEmail(email);
+                          setLoginPassword(password);
+                        }}
+                      >
+                        <strong>{t.seedRoles[role]}</strong>
+                        <span>{email}</span>
+                      </button>
+                    ))}
+                  </div>
+                </form>
+              ) : (
+                <form className="auth-form" onSubmit={handleRegister}>
+                  <button className="google-button" type="button" onClick={handleGoogleStart} disabled={authBusy}>
+                    <span aria-hidden="true">G</span>
+                    {t.login.googleSubmit}
+                  </button>
+                  <p className="auth-hint">{t.login.googleHint}</p>
+                  <label>
+                    {t.login.slug}
+                    <input value={slug} onChange={(event) => setSlug(event.target.value)} />
+                  </label>
+                  <label>
+                    {t.login.name}
+                    <input value={registerName} onChange={(event) => setRegisterName(event.target.value)} required />
+                  </label>
+                  <label>
+                    {t.login.phone}
+                    <input value={registerPhone} onChange={(event) => setRegisterPhone(event.target.value)} required />
+                  </label>
+                  <label>
+                    {t.login.email}
+                    <input value={registerEmail} onChange={(event) => setRegisterEmail(event.target.value)} type="email" required />
+                  </label>
+                  <div className="inline-grid">
+                    <label>
+                      {t.login.password}
+                      <input
+                        value={registerPassword}
+                        onChange={(event) => setRegisterPassword(event.target.value)}
+                        type="password"
+                        minLength={8}
+                        required
+                      />
+                    </label>
+                    <label>
+                      {t.login.confirmPassword}
+                      <input
+                        value={registerConfirmPassword}
+                        onChange={(event) => setRegisterConfirmPassword(event.target.value)}
+                        type="password"
+                        minLength={8}
+                        required
+                      />
+                    </label>
+                  </div>
+                  <button className="primary-button wide" type="submit" disabled={authBusy}>
+                    {t.login.registerSubmit}
+                  </button>
+                </form>
+              )}
+            </div>
           </section>
         )}
 
