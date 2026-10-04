@@ -22,20 +22,19 @@ async function render(path = "/") {
   );
 }
 
-test("server-renders the Rosa do Corte app shell", async () => {
+test("server-renders the Rosa do Corte secure access screen", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
   assert.match(html, /Rosa do Corte \| Clube &amp; Agenda/);
-  assert.match(html, /Painel do barbeiro/);
   assert.match(html, /Acesso seguro/);
-  assert.match(html, /Rosa do Corte no ritmo certo/);
   assert.match(html, /Idioma/);
   assert.match(html, /Português/);
+  assert.match(html, /Fazer login/);
   assert.match(html, /Inscrever-se/);
   assert.match(html, /verificação em duas etapas/);
-  assert.match(html, /Clientes/);
+  assert.match(html, /Slug da barbearia/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton|codex-preview/i);
 });

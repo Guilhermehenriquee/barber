@@ -64,6 +64,50 @@ button {
   width: min(1500px, calc(100% - 3rem));
 }
 
+.auth-shell {
+  background:
+    linear-gradient(120deg, rgba(127, 16, 40, 0.09), transparent 24rem),
+    linear-gradient(90deg, rgba(191, 139, 63, 0.08) 0 1px, transparent 1px 100%),
+    var(--app);
+  background-size: auto, 4rem 4rem, auto;
+  display: grid;
+  gap: 1.2rem;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.auth-topbar,
+.auth-main {
+  margin: 0 auto;
+  width: min(1180px, 100%);
+}
+
+.auth-topbar {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.auth-brand {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(63, 42, 48, 0.06);
+  padding: 0.75rem 0.9rem;
+}
+
+.auth-main {
+  align-content: center;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.auth-shell .login-screen {
+  min-height: min(44rem, calc(100vh - 9rem));
+}
+
 .app-shell::before {
   background: repeating-linear-gradient(135deg, var(--wine) 0 0.55rem, var(--porcelain) 0.55rem 1rem, var(--rose-strong) 1rem 1.55rem, var(--porcelain) 1.55rem 2rem);
   content: "";
@@ -486,6 +530,18 @@ dt,
 
 .split-grid {
   grid-template-columns: minmax(0, 1.18fr) minmax(18rem, 0.82fr);
+}
+
+.client-home-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
+}
+
+.client-next-panel {
+  background:
+    linear-gradient(180deg, rgba(127, 16, 40, 0.055), transparent 12rem),
+    var(--surface-strong);
 }
 
 .panel,
@@ -924,6 +980,65 @@ select:focus {
   width: 4.8rem;
 }
 
+.avatar.small {
+  font-size: 1rem;
+  height: 3.2rem;
+  width: 3.2rem;
+}
+
+.profile-mini {
+  align-items: center;
+  display: flex;
+  gap: 0.8rem;
+  padding-top: 0.2rem;
+}
+
+.profile-mini h3 {
+  color: var(--ink);
+  margin: 0;
+}
+
+.profile-mini p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0.12rem 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.service-mini-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.service-mini-row {
+  align-items: center;
+  border-bottom: 1px solid #f0e7e9;
+  display: flex;
+  gap: 0.8rem;
+  justify-content: space-between;
+  min-height: 3.2rem;
+  padding: 0.35rem 0;
+}
+
+.service-mini-row:last-child {
+  border-bottom: 0;
+}
+
+.service-mini-row div {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.service-mini-row strong {
+  color: var(--ink);
+}
+
+.service-mini-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 dl {
   display: grid;
   gap: 0.75rem;
@@ -1176,6 +1291,7 @@ dd {
 
   .login-screen,
   .split-grid,
+  .client-home-grid,
   .booking-grid,
   .club-layout,
   .profile-grid,
@@ -1185,6 +1301,20 @@ dd {
 }
 
 @media (max-width: 760px) {
+  .auth-shell {
+    padding: 0.85rem;
+  }
+
+  .auth-topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auth-brand,
+  .auth-topbar .locale-control {
+    width: 100%;
+  }
+
   .app-shell {
     border: 0;
     margin: 0;
@@ -1217,7 +1347,7 @@ dd {
   .nav-list {
     display: grid;
     gap: 0.25rem;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr));
     overflow: visible;
     padding-bottom: 0;
     width: 100%;

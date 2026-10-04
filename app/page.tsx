@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-type SectionId = "login" | "inicio" | "agenda" | "cadastros" | "cliente";
+type SectionId = "inicio" | "agenda" | "cadastros" | "cliente";
 type UserRole = "owner" | "admin" | "barber" | "reception" | "client";
 type AppointmentStatus = "scheduled" | "confirmed" | "in_service" | "completed" | "no_show" | "cancelled";
 type Locale = "pt-BR" | "en-US";
@@ -229,6 +229,13 @@ const copy = {
       clubTitle: "Clube da barba",
       plans: "Planos",
       planNames: ["Essencial", "Rosa Club", "Patrão"],
+      clientTitle: "Minha agenda",
+      clientSubtitle: "Acompanhe seus próximos horários, histórico e serviços disponíveis.",
+      clientNext: "Próximo horário",
+      clientServices: "Serviços disponíveis",
+      clientHistory: "Histórico da data",
+      clientEmptyNext: "Você ainda não tem horário marcado para esta data.",
+      clientProfile: "Minha conta",
     },
     agenda: {
       eyebrow: "Agendar horário",
@@ -412,6 +419,13 @@ const copy = {
       clubTitle: "Beard club",
       plans: "Plans",
       planNames: ["Essential", "Rosa Club", "Patron"],
+      clientTitle: "My schedule",
+      clientSubtitle: "Follow your upcoming appointments, history and available services.",
+      clientNext: "Next appointment",
+      clientServices: "Available services",
+      clientHistory: "Date history",
+      clientEmptyNext: "You do not have an appointment for this date yet.",
+      clientProfile: "My account",
     },
     agenda: {
       eyebrow: "Book a time",
@@ -501,7 +515,6 @@ const copy = {
 type Copy = (typeof copy)["pt-BR"];
 
 const navItems: Array<{ id: SectionId; icon: string }> = [
-  { id: "login", icon: "AC" },
   { id: "inicio", icon: "IN" },
   { id: "agenda", icon: "AG" },
   { id: "cadastros", icon: "CL" },
@@ -515,9 +528,14 @@ const seedLogins = [
   { role: "client" as const, email: "cliente@rosadocorte.com.br", password: "rosa-cliente" },
 ];
 
+function canAccessSection(id: SectionId, user: User) {
+  if (id === "cadastros") return ["owner", "admin", "reception", "barber"].includes(user.role);
+  return true;
+}
+
 export default function Home() {
   const [locale, setLocale] = useState<Locale>("pt-BR");
-  const [section, setSection] = useState<SectionId>("login");
+  const [section, setSection] = useState<SectionId>("inicio");
   const [slug, setSlug] = useState("rosa-do-corte");
   const [date, setDate] = useState(todayInputValue());
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace);
@@ -545,8 +563,11 @@ export default function Home() {
 
   const t = copy[locale];
   const user = workspace.user;
-  const canManageAgenda = user && ["owner", "admin", "reception", "barber"].includes(user.role);
-  const canManageCatalog = user && ["owner", "admin"].includes(user.role);
+  const canManageAgenda = Boolean(user && ["owner", "admin", "reception", "barber"].includes(user.role));
+  const canManageCatalog = Boolean(user && ["owner", "admin"].includes(user.role));
+  const isClient = user?.role === "client";
+  const visibleNavItems = useMemo(() => (user ? navItems.filter((item) => canAccessSection(item.id, user)) : []), [user]);
+  const activeSection = user && canAccessSection(section, user) ? section : "inicio";
 
   useEffect(() => {
     void loadWorkspace();
@@ -559,7 +580,6 @@ export default function Home() {
     if (!challengeId) return;
 
     void Promise.resolve().then(() => {
-      setSection("login");
       setAuthBusy(true);
       void fetch(`/api/auth/2fa/challenge?id=${encodeURIComponent(challengeId)}`)
         .then(async (response) => {
@@ -611,7 +631,6 @@ export default function Home() {
       setSelectedClientId((current) =>
         data.clients.some((client) => client.id === current) ? current : data.clients[0]?.id ?? "",
       );
-      if (data.user && section === "login") setSection("inicio");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t.messages.loadFail);
     } finally {
@@ -751,7 +770,7 @@ export default function Home() {
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setWorkspace(emptyWorkspace);
-    setSection("login");
+    setSection("inicio");
     await loadWorkspace();
   }
 
@@ -840,10 +859,218 @@ export default function Home() {
     await loadWorkspace();
   }
 
+  const authScreen = (
+    <main className="auth-shell" lang={locale}>
+      <header className="auth-topbar">
+        <div className="brand auth-brand">
+          <span className="brand-mark" aria-hidden="true">
+            RC
+          </span>
+          <span>
+            <strong>{workspace.shop?.name ?? "Rosa do Corte"}</strong>
+            <small>{workspace.shop?.slug ?? slug}</small>
+          </span>
+        </div>
+        <label className="locale-control">
+          <span>{t.language.label}</span>
+          <select aria-label={t.language.aria} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+            <option value="pt-BR">{t.language.pt}</option>
+            <option value="en-US">{t.language.en}</option>
+          </select>
+        </label>
+      </header>
+
+      <div className="auth-main">
+        {message && <div className="notice">{message}</div>}
+        {loading && <div className="notice muted">{t.common.loading}</div>}
+
+        <section className="screen login-screen" aria-labelledby="login-title">
+          <div className="login-copy">
+            <p className="eyebrow">{t.login.eyebrow}</p>
+            <h2 id="login-title">{t.login.title}</h2>
+            <p>{t.login.description}</p>
+            <div className="login-proof">
+              <span>{t.login.slugBadge}</span>
+              <strong>{slug}</strong>
+            </div>
+          </div>
+          <div className="login-form">
+            {!pendingChallenge && (
+              <div className="auth-switch" role="tablist" aria-label={t.login.eyebrow}>
+                <button
+                  aria-selected={authMode === "login"}
+                  className={authMode === "login" ? "active" : ""}
+                  onClick={() => {
+                    setAuthMode("login");
+                    setPendingChallenge(null);
+                    setMessage("");
+                  }}
+                  role="tab"
+                  type="button"
+                >
+                  {t.login.tabLogin}
+                </button>
+                <button
+                  aria-selected={authMode === "register"}
+                  className={authMode === "register" ? "active" : ""}
+                  onClick={() => {
+                    setAuthMode("register");
+                    setPendingChallenge(null);
+                    setMessage("");
+                  }}
+                  role="tab"
+                  type="button"
+                >
+                  {t.login.tabRegister}
+                </button>
+              </div>
+            )}
+
+            {pendingChallenge ? (
+              <form className="two-factor-card" onSubmit={handleVerifyTwoFactor}>
+                <div>
+                  <p className="eyebrow">{t.twoFactor.eyebrow}</p>
+                  <h3>{pendingChallenge.setupRequired ? t.twoFactor.setupTitle : t.twoFactor.title}</h3>
+                  <p>
+                    {pendingChallenge.setupRequired ? t.twoFactor.setupDescription : t.twoFactor.description}{" "}
+                    {!pendingChallenge.setupRequired && <strong>{pendingChallenge.deliveryTarget}</strong>}
+                  </p>
+                </div>
+                {pendingChallenge.setupRequired && pendingChallenge.setupSecret && (
+                  <div className="setup-stack">
+                    <div className="setup-secret">
+                      <span>{t.twoFactor.secretLabel}</span>
+                      <strong>{pendingChallenge.setupSecret}</strong>
+                    </div>
+                    {pendingChallenge.setupUri && (
+                      <label>
+                        {t.twoFactor.uriLabel}
+                        <input readOnly value={pendingChallenge.setupUri} onFocus={(event) => event.currentTarget.select()} />
+                      </label>
+                    )}
+                  </div>
+                )}
+                <label>
+                  {t.twoFactor.code}
+                  <input
+                    inputMode="numeric"
+                    maxLength={6}
+                    pattern="[0-9]{6}"
+                    value={twoFactorCode}
+                    onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  />
+                </label>
+                <button className="primary-button wide" type="submit" disabled={authBusy || twoFactorCode.length !== 6}>
+                  {t.twoFactor.submit}
+                </button>
+                <button
+                  className="ghost-button wide"
+                  type="button"
+                  onClick={() => {
+                    setPendingChallenge(null);
+                    setTwoFactorCode("");
+                    setMessage("");
+                  }}
+                >
+                  {t.twoFactor.back}
+                </button>
+              </form>
+            ) : authMode === "login" ? (
+              <form className="auth-form" onSubmit={handleLogin}>
+                <label>
+                  {t.login.slug}
+                  <input value={slug} onChange={(event) => setSlug(event.target.value)} />
+                </label>
+                <label>
+                  {t.login.email}
+                  <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} type="email" />
+                </label>
+                <label>
+                  {t.login.password}
+                  <input value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} type="password" />
+                </label>
+                <button className="primary-button wide" type="submit" disabled={authBusy}>
+                  {t.login.submit}
+                </button>
+                <div className="credential-grid" aria-label={t.login.demoAccess}>
+                  {seedLogins.map(({ role, email, password }) => (
+                    <button
+                      className="credential-card"
+                      key={email}
+                      type="button"
+                      onClick={() => {
+                        setLoginEmail(email);
+                        setLoginPassword(password);
+                      }}
+                    >
+                      <strong>{t.seedRoles[role]}</strong>
+                      <span>{email}</span>
+                    </button>
+                  ))}
+                </div>
+              </form>
+            ) : (
+              <form className="auth-form" onSubmit={handleRegister}>
+                <button className="google-button" type="button" onClick={handleGoogleStart} disabled={authBusy}>
+                  <span aria-hidden="true">G</span>
+                  {t.login.googleSubmit}
+                </button>
+                <p className="auth-hint">{t.login.googleHint}</p>
+                <label>
+                  {t.login.slug}
+                  <input value={slug} onChange={(event) => setSlug(event.target.value)} />
+                </label>
+                <label>
+                  {t.login.name}
+                  <input value={registerName} onChange={(event) => setRegisterName(event.target.value)} required />
+                </label>
+                <label>
+                  {t.login.phone}
+                  <input value={registerPhone} onChange={(event) => setRegisterPhone(event.target.value)} required />
+                </label>
+                <label>
+                  {t.login.email}
+                  <input value={registerEmail} onChange={(event) => setRegisterEmail(event.target.value)} type="email" required />
+                </label>
+                <div className="inline-grid">
+                  <label>
+                    {t.login.password}
+                    <input
+                      value={registerPassword}
+                      onChange={(event) => setRegisterPassword(event.target.value)}
+                      type="password"
+                      minLength={8}
+                      required
+                    />
+                  </label>
+                  <label>
+                    {t.login.confirmPassword}
+                    <input
+                      value={registerConfirmPassword}
+                      onChange={(event) => setRegisterConfirmPassword(event.target.value)}
+                      type="password"
+                      minLength={8}
+                      required
+                    />
+                  </label>
+                </div>
+                <button className="primary-button wide" type="submit" disabled={authBusy}>
+                  {t.login.registerSubmit}
+                </button>
+              </form>
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+
+  if (!user) return authScreen;
+
   return (
     <main className="app-shell" lang={locale}>
       <aside className="sidebar" aria-label={locale === "pt-BR" ? "Navegação principal" : "Main navigation"}>
-        <button className="brand" type="button" onClick={() => setSection(user ? "inicio" : "login")}>
+        <button className="brand" type="button" onClick={() => setSection("inicio")}>
           <span className="brand-mark" aria-hidden="true">
             RC
           </span>
@@ -854,9 +1081,9 @@ export default function Home() {
         </button>
 
         <nav className="nav-list">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <button
-              aria-current={section === item.id ? "page" : undefined}
+              aria-current={activeSection === item.id ? "page" : undefined}
               className="nav-button"
               key={item.id}
               onClick={() => setSection(item.id)}
@@ -873,7 +1100,7 @@ export default function Home() {
 
         <div className="sidebar-status">
           <span className="status-dot" />
-          <span>{user ? `${t.roles[user.role]} ${t.common.roleLogged}` : t.common.waitingLogin}</span>
+          <span>{`${t.roles[user.role]} ${t.common.roleLogged}`}</span>
         </div>
       </aside>
 
@@ -896,265 +1123,151 @@ export default function Home() {
                 <option value="en-US">{t.language.en}</option>
               </select>
             </label>
-            {user ? (
-              <button className="ghost-button" type="button" onClick={handleLogout}>
-                {t.common.leave}
-              </button>
-            ) : (
-              <button className="primary-button" type="button" onClick={() => setSection("login")}>
-                {t.common.enter}
-              </button>
-            )}
+            <span className="pill strong">{t.roles[user.role]}</span>
+            <button className="ghost-button" type="button" onClick={handleLogout}>
+              {t.common.leave}
+            </button>
           </div>
         </header>
 
         {message && <div className="notice">{message}</div>}
         {loading && <div className="notice muted">{t.common.loading}</div>}
 
-        {section === "login" && (
-          <section className="screen login-screen" aria-labelledby="login-title">
-            <div className="login-copy">
-              <p className="eyebrow">{t.login.eyebrow}</p>
-              <h2 id="login-title">{t.login.title}</h2>
-              <p>{t.login.description}</p>
-              <div className="login-proof">
-                <span>{t.login.slugBadge}</span>
-                <strong>{slug}</strong>
-              </div>
-            </div>
-            <div className="login-form">
-              {!pendingChallenge && (
-                <div className="auth-switch" role="tablist" aria-label={t.login.eyebrow}>
-                  <button
-                    aria-selected={authMode === "login"}
-                    className={authMode === "login" ? "active" : ""}
-                    onClick={() => {
-                      setAuthMode("login");
-                      setPendingChallenge(null);
-                      setMessage("");
-                    }}
-                    role="tab"
-                    type="button"
-                  >
-                    {t.login.tabLogin}
-                  </button>
-                  <button
-                    aria-selected={authMode === "register"}
-                    className={authMode === "register" ? "active" : ""}
-                    onClick={() => {
-                      setAuthMode("register");
-                      setPendingChallenge(null);
-                      setMessage("");
-                    }}
-                    role="tab"
-                    type="button"
-                  >
-                    {t.login.tabRegister}
-                  </button>
-                </div>
-              )}
-
-              {pendingChallenge ? (
-                <form className="two-factor-card" onSubmit={handleVerifyTwoFactor}>
-                  <div>
-                    <p className="eyebrow">{t.twoFactor.eyebrow}</p>
-                    <h3>{pendingChallenge.setupRequired ? t.twoFactor.setupTitle : t.twoFactor.title}</h3>
-                    <p>
-                      {pendingChallenge.setupRequired ? t.twoFactor.setupDescription : t.twoFactor.description}{" "}
-                      {!pendingChallenge.setupRequired && <strong>{pendingChallenge.deliveryTarget}</strong>}
-                    </p>
-                  </div>
-                  {pendingChallenge.setupRequired && pendingChallenge.setupSecret && (
-                    <div className="setup-stack">
-                      <div className="setup-secret">
-                        <span>{t.twoFactor.secretLabel}</span>
-                        <strong>{pendingChallenge.setupSecret}</strong>
-                      </div>
-                      {pendingChallenge.setupUri && (
-                        <label>
-                          {t.twoFactor.uriLabel}
-                          <input readOnly value={pendingChallenge.setupUri} onFocus={(event) => event.currentTarget.select()} />
-                        </label>
-                      )}
-                    </div>
-                  )}
-                  <label>
-                    {t.twoFactor.code}
-                    <input
-                      inputMode="numeric"
-                      maxLength={6}
-                      pattern="[0-9]{6}"
-                      value={twoFactorCode}
-                      onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    />
-                  </label>
-                  <button className="primary-button wide" type="submit" disabled={authBusy || twoFactorCode.length !== 6}>
-                    {t.twoFactor.submit}
-                  </button>
-                  <button
-                    className="ghost-button wide"
-                    type="button"
-                    onClick={() => {
-                      setPendingChallenge(null);
-                      setTwoFactorCode("");
-                      setMessage("");
-                    }}
-                  >
-                    {t.twoFactor.back}
-                  </button>
-                </form>
-              ) : authMode === "login" ? (
-                <form className="auth-form" onSubmit={handleLogin}>
-                  <label>
-                    {t.login.slug}
-                    <input value={slug} onChange={(event) => setSlug(event.target.value)} />
-                  </label>
-                  <label>
-                    {t.login.email}
-                    <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} type="email" />
-                  </label>
-                  <label>
-                    {t.login.password}
-                    <input value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} type="password" />
-                  </label>
-                  <button className="primary-button wide" type="submit" disabled={authBusy}>
-                    {t.login.submit}
-                  </button>
-                  <div className="credential-grid" aria-label={t.login.demoAccess}>
-                    {seedLogins.map(({ role, email, password }) => (
-                      <button
-                        className="credential-card"
-                        key={email}
-                        type="button"
-                        onClick={() => {
-                          setLoginEmail(email);
-                          setLoginPassword(password);
-                        }}
-                      >
-                        <strong>{t.seedRoles[role]}</strong>
-                        <span>{email}</span>
-                      </button>
-                    ))}
-                  </div>
-                </form>
-              ) : (
-                <form className="auth-form" onSubmit={handleRegister}>
-                  <button className="google-button" type="button" onClick={handleGoogleStart} disabled={authBusy}>
-                    <span aria-hidden="true">G</span>
-                    {t.login.googleSubmit}
-                  </button>
-                  <p className="auth-hint">{t.login.googleHint}</p>
-                  <label>
-                    {t.login.slug}
-                    <input value={slug} onChange={(event) => setSlug(event.target.value)} />
-                  </label>
-                  <label>
-                    {t.login.name}
-                    <input value={registerName} onChange={(event) => setRegisterName(event.target.value)} required />
-                  </label>
-                  <label>
-                    {t.login.phone}
-                    <input value={registerPhone} onChange={(event) => setRegisterPhone(event.target.value)} required />
-                  </label>
-                  <label>
-                    {t.login.email}
-                    <input value={registerEmail} onChange={(event) => setRegisterEmail(event.target.value)} type="email" required />
-                  </label>
-                  <div className="inline-grid">
-                    <label>
-                      {t.login.password}
-                      <input
-                        value={registerPassword}
-                        onChange={(event) => setRegisterPassword(event.target.value)}
-                        type="password"
-                        minLength={8}
-                        required
-                      />
-                    </label>
-                    <label>
-                      {t.login.confirmPassword}
-                      <input
-                        value={registerConfirmPassword}
-                        onChange={(event) => setRegisterConfirmPassword(event.target.value)}
-                        type="password"
-                        minLength={8}
-                        required
-                      />
-                    </label>
-                  </div>
-                  <button className="primary-button wide" type="submit" disabled={authBusy}>
-                    {t.login.registerSubmit}
-                  </button>
-                </form>
-              )}
-            </div>
-          </section>
-        )}
-
-        {section === "inicio" && (
+        {activeSection === "inicio" && (
           <section className="screen" aria-labelledby="home-title">
             <div className="home-head">
               <div className="hero-content">
-                <h2 id="home-title">{t.nav.inicio}</h2>
-                <p>{formatLongDate(date, locale)}</p>
+                <h2 id="home-title">{isClient ? t.home.clientTitle : t.nav.inicio}</h2>
+                <p>{isClient ? t.home.clientSubtitle : formatLongDate(date, locale)}</p>
               </div>
               <button className="primary-button" type="button" onClick={() => setSection("agenda")}>
                 {t.home.newAppointment}
               </button>
             </div>
 
-            <div className="metrics-grid">
-              <Metric title={t.home.metrics.subscribers[0]} value={activeSubscribers || 128} detail={t.home.metrics.subscribers[1]} />
-              <Metric title={t.home.metrics.revenue[0]} value={formatMoney(monthlyRevenueCents || 1482000, locale)} detail={t.home.metrics.revenue[1]} />
-              <Metric title={t.home.metrics.retention[0]} value={`${retentionRate}%`} detail={t.home.metrics.retention[1]} />
-              <Metric title={t.home.metrics.missed[0]} value={noShowCount} detail={t.home.metrics.missed[1]} />
-            </div>
+            {isClient ? (
+              <div className="client-home-grid">
+                <article className="panel client-next-panel">
+                  <div className="panel-heading">
+                    <span>{t.home.clientNext}</span>
+                    <button className="icon-button small" type="button" title={t.home.openAgenda} onClick={() => setSection("agenda")}>
+                      AG
+                    </button>
+                  </div>
+                  {nextAppointment ? (
+                    <AppointmentHighlight appointment={nextAppointment} locale={locale} withLabel={t.common.with} />
+                  ) : (
+                    <p className="empty-state">{t.home.clientEmptyNext}</p>
+                  )}
+                </article>
 
-            <div className="split-grid">
-              <article className="panel">
-                <div className="panel-heading">
-                  <span>{t.home.agendaTitle}</span>
-                  <button className="icon-button small" type="button" title={t.home.openAgenda} onClick={() => setSection("agenda")}>
-                    AG
-                  </button>
-                </div>
-                {workspace.appointments.length ? (
-                  <div className="today-list">
-                    {workspace.appointments.slice(0, 5).map((appointment) => (
-                      <div className="today-row" key={appointment.id}>
+                <article className="panel">
+                  <div className="panel-heading">
+                    <span>{t.home.clientHistory}</span>
+                    <span className="pill">{date}</span>
+                  </div>
+                  <ul className="timeline">
+                    {workspace.appointments.map((appointment) => (
+                      <li key={appointment.id}>
                         <strong>{formatTime(appointment.starts_at, locale)}</strong>
+                        {appointment.service_name} {t.common.with} {appointment.professional_name} - {t.status[appointment.status]}
+                      </li>
+                    ))}
+                    {!workspace.appointments.length && <li>{t.profile.empty}</li>}
+                  </ul>
+                </article>
+
+                <article className="panel">
+                  <div className="panel-heading">
+                    <span>{t.home.clientServices}</span>
+                    <span className="pill">{workspace.services.length}</span>
+                  </div>
+                  <div className="service-mini-list">
+                    {workspace.services.slice(0, 5).map((service) => (
+                      <div className="service-mini-row" key={service.id}>
                         <div>
-                          <h3>{appointment.client_name}</h3>
-                          <p>
-                            {appointment.service_name} {t.common.with} {appointment.professional_name}
-                          </p>
+                          <strong>{service.name}</strong>
+                          <span>{service.duration_minutes} min</span>
                         </div>
-                        <span>{t.status[appointment.status]}</span>
+                        <strong>{formatMoney(service.price_cents, locale)}</strong>
                       </div>
                     ))}
                   </div>
-                ) : nextAppointment ? (
-                  <AppointmentHighlight appointment={nextAppointment} locale={locale} withLabel={t.common.with} />
-                ) : (
-                  <p className="empty-state">{t.home.noActive}</p>
-                )}
-              </article>
-              <article className="panel">
-                <div className="panel-heading">
-                  <span>{t.home.clubTitle}</span>
-                  <span className="pill">{t.home.plans}</span>
+                </article>
+
+                <article className="panel">
+                  <div className="panel-heading">
+                    <span>{t.home.clientProfile}</span>
+                    <button className="icon-button small" type="button" title={t.nav.cliente} onClick={() => setSection("cliente")}>
+                      PF
+                    </button>
+                  </div>
+                  <div className="profile-mini">
+                    <div className="avatar small">{initials(user.name)}</div>
+                    <div>
+                      <h3>{user.name}</h3>
+                      <p>{user.email}</p>
+                      <span className="pill strong">{t.roles[user.role]}</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            ) : (
+              <>
+                <div className="metrics-grid">
+                  <Metric title={t.home.metrics.subscribers[0]} value={activeSubscribers} detail={t.home.metrics.subscribers[1]} />
+                  <Metric title={t.home.metrics.revenue[0]} value={formatMoney(monthlyRevenueCents, locale)} detail={t.home.metrics.revenue[1]} />
+                  <Metric title={t.home.metrics.retention[0]} value={`${retentionRate}%`} detail={t.home.metrics.retention[1]} />
+                  <Metric title={t.home.metrics.missed[0]} value={noShowCount} detail={t.home.metrics.missed[1]} />
                 </div>
-                <div className="club-progress-list">
-                  <PlanProgress label={t.home.planNames[0]} value={52} />
-                  <PlanProgress label={t.home.planNames[1]} value={61} />
-                  <PlanProgress label={t.home.planNames[2]} value={15} />
+
+                <div className="split-grid">
+                  <article className="panel">
+                    <div className="panel-heading">
+                      <span>{t.home.agendaTitle}</span>
+                      <button className="icon-button small" type="button" title={t.home.openAgenda} onClick={() => setSection("agenda")}>
+                        AG
+                      </button>
+                    </div>
+                    {workspace.appointments.length ? (
+                      <div className="today-list">
+                        {workspace.appointments.slice(0, 5).map((appointment) => (
+                          <div className="today-row" key={appointment.id}>
+                            <strong>{formatTime(appointment.starts_at, locale)}</strong>
+                            <div>
+                              <h3>{appointment.client_name}</h3>
+                              <p>
+                                {appointment.service_name} {t.common.with} {appointment.professional_name}
+                              </p>
+                            </div>
+                            <span>{t.status[appointment.status]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : nextAppointment ? (
+                      <AppointmentHighlight appointment={nextAppointment} locale={locale} withLabel={t.common.with} />
+                    ) : (
+                      <p className="empty-state">{t.home.noActive}</p>
+                    )}
+                  </article>
+                  <article className="panel">
+                    <div className="panel-heading">
+                      <span>{t.home.clubTitle}</span>
+                      <span className="pill">{t.home.plans}</span>
+                    </div>
+                    <div className="club-progress-list">
+                      <PlanProgress label={t.home.planNames[0]} value={52} />
+                      <PlanProgress label={t.home.planNames[1]} value={61} />
+                      <PlanProgress label={t.home.planNames[2]} value={15} />
+                    </div>
+                  </article>
                 </div>
-              </article>
-            </div>
+              </>
+            )}
           </section>
         )}
 
-        {section === "agenda" && (
+        {activeSection === "agenda" && (
           <section className="screen" aria-labelledby="agenda-title">
             <div className="section-heading">
               <div>
@@ -1269,7 +1382,7 @@ export default function Home() {
           </section>
         )}
 
-        {section === "cadastros" && (
+        {activeSection === "cadastros" && (
           <section className="screen" aria-labelledby="catalog-title">
             <div className="section-heading">
               <div>
@@ -1322,7 +1435,7 @@ export default function Home() {
           </section>
         )}
 
-        {section === "cliente" && (
+        {activeSection === "cliente" && (
           <section className="screen" aria-labelledby="client-title">
             <div className="section-heading">
               <div>
