@@ -1,8 +1,8 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="64" height="64" rx="12" fill="#111111"/>
-  <path d="M10 53L53 10" stroke="#D7353D" stroke-width="8"/>
-  <path d="M21 53L53 21" stroke="#F6F1E8" stroke-width="8"/>
-  <path d="M34 53L53 34" stroke="#2B85C7" stroke-width="8"/>
-  <rect x="10" y="10" width="44" height="44" rx="8" stroke="#D7A94A" stroke-width="3"/>
-  <text x="32" y="38" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" font-weight="900" fill="#F6F1E8">RC</text>
+  <rect width="64" height="64" rx="14" fill="#7F1028"/>
+  <path d="M13 54L54 13" stroke="#FFF9F8" stroke-width="9"/>
+  <path d="M24 56L56 24" stroke="#DC9AAA" stroke-width="9"/>
+  <path d="M8 39L39 8" stroke="#FFF9F8" stroke-width="7"/>
+  <rect x="10" y="10" width="44" height="44" rx="10" stroke="#BF8B3F" stroke-width="3"/>
+  <text x="32" y="39" text-anchor="middle" font-family="Georgia, serif" font-size="18" font-weight="700" fill="#FFF9F8">RC</text>
 </svg>

@@ -3,6 +3,7 @@
 :root {
   --app: #f5eeee;
   --canvas: #ecebea;
+  --porcelain: #fff9f8;
   --surface: #fffdfd;
   --surface-soft: #f8f1f2;
   --surface-strong: #ffffff;
@@ -30,7 +31,10 @@ html {
 }
 
 body {
-  background: var(--canvas);
+  background:
+    linear-gradient(90deg, rgba(127, 16, 40, 0.035) 0 1px, transparent 1px 100%),
+    var(--canvas);
+  background-size: 4rem 4rem;
   color: var(--text);
   font-family: Inter, "Segoe UI", Arial, sans-serif;
   margin: 0;
@@ -56,7 +60,19 @@ button {
   margin: 2rem auto;
   min-height: calc(100vh - 4rem);
   overflow: hidden;
+  position: relative;
   width: min(1500px, calc(100% - 3rem));
+}
+
+.app-shell::before {
+  background: repeating-linear-gradient(135deg, var(--wine) 0 0.55rem, var(--porcelain) 0.55rem 1rem, var(--rose-strong) 1rem 1.55rem, var(--porcelain) 1.55rem 2rem);
+  content: "";
+  height: 0.35rem;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 3;
 }
 
 .sidebar {
@@ -239,6 +255,29 @@ button {
   gap: 0.65rem;
 }
 
+.locale-control {
+  align-items: center;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 0.55rem;
+  min-height: 2.65rem;
+  padding: 0 0.45rem 0 0.8rem;
+}
+
+.locale-control span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.locale-control select {
+  border: 0;
+  min-height: 2.2rem;
+  padding: 0 1.55rem 0 0.4rem;
+}
+
 .eyebrow {
   color: var(--wine);
   font-size: 0.74rem;
@@ -273,11 +312,25 @@ button {
 }
 
 .login-copy {
-  background: var(--surface-strong);
+  background:
+    linear-gradient(180deg, rgba(127, 16, 40, 0.06), transparent 12rem),
+    var(--surface-strong);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
+  overflow: hidden;
   padding: clamp(1.25rem, 4vw, 2.2rem);
+  position: relative;
+}
+
+.login-copy::before {
+  background: repeating-linear-gradient(135deg, var(--wine) 0 0.45rem, #fff9fa 0.45rem 0.85rem);
+  content: "";
+  height: 0.45rem;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
 }
 
 .login-copy h2 {
@@ -1091,9 +1144,18 @@ dd {
 
   .topbar-actions,
   .hero-actions,
+  .locale-control,
   .primary-button,
   .ghost-button {
     width: 100%;
+  }
+
+  .locale-control {
+    justify-content: space-between;
+  }
+
+  .locale-control select {
+    flex: 1;
   }
 
   .compact-input {
