@@ -1028,7 +1028,12 @@ dd {
   margin: 0;
 }
 
-.dev-code {
+.setup-stack {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.setup-secret {
   align-items: center;
   background: var(--surface-soft);
   border: 1px dashed var(--rose-strong);
@@ -1038,16 +1043,18 @@ dd {
   padding: 0.8rem;
 }
 
-.dev-code span {
+.setup-secret span {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 850;
 }
 
-.dev-code strong {
+.setup-secret strong {
   color: var(--wine);
-  font-size: 1.3rem;
+  font-size: 0.92rem;
   letter-spacing: 0.08rem;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .credential-grid {

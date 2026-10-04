@@ -15,6 +15,13 @@
       "when": 1791139200000,
       "tag": "0001_auth_2fa",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791139800000,
+      "tag": "0002_totp_2fa",
+      "breakpoints": true
     }
   ]
 }

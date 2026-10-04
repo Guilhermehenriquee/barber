@@ -106,9 +106,11 @@ export type AvailabilitySlot = {
 export type TwoFactorChallenge = {
   challengeId: string;
   expiresAt: string;
-  channel: "email";
+  channel: "authenticator";
   deliveryTarget: string;
-  devCode: string;
+  setupRequired: boolean;
+  setupSecret?: string;
+  setupUri?: string;
 };
 
 export type PendingAuth = {
@@ -143,6 +145,8 @@ export function canManageCatalog(role: UserRole) {
 async function ensureAuthSchema(db: D1Database) {
   await runBestEffort(db, "alter table users add column two_factor_enabled integer not null default 1");
   await runBestEffort(db, "alter table users add column two_factor_channel text not null default 'email'");
+  await runBestEffort(db, "alter table users add column two_factor_secret text");
+  await runBestEffort(db, "alter table users add column two_factor_confirmed_at text");
   await runBestEffort(db, "alter table users add column google_sub text");
   await db
     .prepare(
@@ -475,7 +479,7 @@ export async function registerClientAccount(payload: {
       .prepare(
         `insert into users
          (id, barber_shop_id, name, email, phone, role, password_salt, password_hash, active, two_factor_enabled, two_factor_channel)
-         values (?, ?, ?, ?, ?, 'client', ?, ?, 1, 1, 'email')`,
+         values (?, ?, ?, ?, ?, 'client', ?, ?, 1, 1, 'totp')`,
       )
       .bind(userId, shop.id, name, email, phone, salt, passwordHash),
     getDb()
@@ -501,8 +505,9 @@ export async function verifyTwoFactorChallenge(challengeId: string, code: string
 
   const row = await getDb()
     .prepare(
-      `select c.id, c.user_id, c.code_hash, c.expires_at, c.consumed_at,
+      `select c.id, c.user_id, c.expires_at, c.consumed_at,
               u.id as id, u.barber_shop_id, u.name, u.email, u.phone, u.role,
+              u.two_factor_secret, u.two_factor_confirmed_at,
               b.slug as barber_shop_slug, b.name as barber_shop_name
        from auth_challenges c
        join users u on u.id = c.user_id
@@ -513,9 +518,10 @@ export async function verifyTwoFactorChallenge(challengeId: string, code: string
     .bind(challengeId)
     .first<
       SessionUser & {
-        code_hash: string;
         expires_at: string;
         consumed_at: string | null;
+        two_factor_secret: string | null;
+        two_factor_confirmed_at: string | null;
         user_id: string;
         barber_shop_id: string;
         barber_shop_slug: string;
@@ -526,9 +532,10 @@ export async function verifyTwoFactorChallenge(challengeId: string, code: string
   if (!row) throw new Error("Verificacao nao encontrada.");
   if (row.consumed_at) throw new Error("Este codigo ja foi usado.");
   if (Date.parse(row.expires_at) <= Date.now()) throw new Error("Codigo expirado. Entre novamente.");
+  if (!row.two_factor_secret) throw new Error("2FA ainda nao foi configurado.");
 
-  const attemptedHash = await sha256Hex(`${challengeId}:${normalizedCode}`);
-  if (!timingSafeEqual(attemptedHash, row.code_hash)) {
+  const valid = await verifyTotpCode(row.two_factor_secret, normalizedCode);
+  if (!valid) {
     throw new Error("Codigo 2FA invalido.");
   }
 
@@ -536,21 +543,69 @@ export async function verifyTwoFactorChallenge(challengeId: string, code: string
     .prepare("update auth_challenges set consumed_at = ? where id = ?")
     .bind(new Date().toISOString(), challengeId)
     .run();
+  if (!row.two_factor_confirmed_at) {
+    await getDb()
+      .prepare("update users set two_factor_confirmed_at = ?, two_factor_channel = 'totp' where id = ?")
+      .bind(new Date().toISOString(), row.user_id)
+      .run();
+  }
 
   const session = await issueSession(row.user_id, requestUrl);
   return session;
 }
 
-export function getGoogleAuthStart(slug: string, mode: "login" | "register", requestUrl: string) {
-  const googleEnv = env as { GOOGLE_CLIENT_ID?: string; GOOGLE_REDIRECT_URI?: string };
-  const clientId = googleEnv.GOOGLE_CLIENT_ID;
-  const redirectUri = googleEnv.GOOGLE_REDIRECT_URI;
+export async function getTwoFactorChallenge(challengeId: string) {
+  await ensureSeedData();
+  const row = await getDb()
+    .prepare(
+      `select c.id, c.user_id, c.expires_at, c.consumed_at,
+              u.email, u.two_factor_secret, u.two_factor_confirmed_at,
+              b.name as barber_shop_name
+       from auth_challenges c
+       join users u on u.id = c.user_id
+       join barber_shops b on b.id = u.barber_shop_id
+       where c.id = ? and u.active = 1 and b.active = 1
+       limit 1`,
+    )
+    .bind(challengeId)
+    .first<{
+      id: string;
+      user_id: string;
+      expires_at: string;
+      consumed_at: string | null;
+      email: string;
+      two_factor_secret: string | null;
+      two_factor_confirmed_at: string | null;
+      barber_shop_name: string;
+    }>();
 
-  if (!clientId || !redirectUri) {
+  if (!row) throw new Error("Verificacao nao encontrada.");
+  if (row.consumed_at) throw new Error("Este codigo ja foi usado.");
+  if (Date.parse(row.expires_at) <= Date.now()) throw new Error("Codigo expirado. Entre novamente.");
+  if (!row.two_factor_secret) throw new Error("2FA ainda nao foi configurado.");
+
+  return formatTotpChallenge({
+    challengeId: row.id,
+    expiresAt: row.expires_at,
+    email: row.email,
+    shopName: row.barber_shop_name,
+    secret: row.two_factor_secret,
+    confirmed: Boolean(row.two_factor_confirmed_at),
+  });
+}
+
+export function getGoogleAuthStart(slug: string, mode: "login" | "register", requestUrl: string) {
+  const googleEnv = env as { GOOGLE_CLIENT_ID?: string; GOOGLE_CLIENT_SECRET?: string; GOOGLE_REDIRECT_URI?: string };
+  const clientId = googleEnv.GOOGLE_CLIENT_ID;
+  const clientSecret = googleEnv.GOOGLE_CLIENT_SECRET;
+  const origin = new URL(requestUrl).origin;
+  const redirectUri = googleEnv.GOOGLE_REDIRECT_URI || `${origin}/api/auth/google/callback`;
+
+  if (!clientId || !clientSecret) {
     return {
       configured: false as const,
       message:
-        "Login com Google preparado. Configure GOOGLE_CLIENT_ID e GOOGLE_REDIRECT_URI no ambiente para ativar o OAuth real.",
+        "Login com Google pronto no codigo. Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no ambiente para ativar o OAuth real.",
     };
   }
 
@@ -558,7 +613,7 @@ export function getGoogleAuthStart(slug: string, mode: "login" | "register", req
     JSON.stringify({
       slug,
       mode,
-      next: new URL(requestUrl).origin,
+      next: origin,
       nonce: createToken().slice(0, 18),
     }),
   );
@@ -575,6 +630,119 @@ export function getGoogleAuthStart(slug: string, mode: "login" | "register", req
     configured: true as const,
     url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
   };
+}
+
+export async function completeGoogleAuth(code: string, state: string, requestUrl: string) {
+  await ensureSeedData();
+  const googleEnv = env as { GOOGLE_CLIENT_ID?: string; GOOGLE_CLIENT_SECRET?: string; GOOGLE_REDIRECT_URI?: string };
+  const clientId = googleEnv.GOOGLE_CLIENT_ID;
+  const clientSecret = googleEnv.GOOGLE_CLIENT_SECRET;
+  const redirectUri = googleEnv.GOOGLE_REDIRECT_URI || `${new URL(requestUrl).origin}/api/auth/google/callback`;
+  if (!clientId || !clientSecret) {
+    throw new Error("Google OAuth nao configurado.");
+  }
+
+  const parsedState = parseGoogleState(state);
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
+  });
+  const tokenData = (await tokenResponse.json()) as { access_token?: string; error_description?: string };
+  if (!tokenResponse.ok || !tokenData.access_token) {
+    throw new Error(tokenData.error_description || "Falha ao validar Google.");
+  }
+
+  const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+  const profile = (await profileResponse.json()) as {
+    sub?: string;
+    email?: string;
+    email_verified?: boolean;
+    name?: string;
+  };
+  if (!profileResponse.ok || !profile.sub || !profile.email || !profile.email_verified) {
+    throw new Error("Conta Google sem e-mail verificado.");
+  }
+
+  const shop = await findShopBySlug(parsedState.slug);
+  if (!shop) throw new Error("Barbearia nao encontrada.");
+  const email = profile.email.trim().toLowerCase();
+  const user = await findOrCreateGoogleUser(shop.id, profile.sub, email, profile.name || email, parsedState.mode);
+  const challenge = await createTwoFactorChallenge(user.id, shop.id, user.email, "google");
+  return {
+    challenge,
+    redirectTo: `${new URL(requestUrl).origin}/?authChallenge=${encodeURIComponent(challenge.challengeId)}`,
+  };
+}
+
+function parseGoogleState(state: string) {
+  try {
+    const parsed = JSON.parse(base64UrlDecodeString(state)) as { slug?: string; mode?: "login" | "register" };
+    if (!parsed.slug) throw new Error("Estado invalido.");
+    return {
+      slug: parsed.slug,
+      mode: parsed.mode === "login" ? "login" : "register",
+    };
+  } catch {
+    throw new Error("Estado Google invalido.");
+  }
+}
+
+async function findOrCreateGoogleUser(
+  barberShopId: string,
+  googleSub: string,
+  email: string,
+  name: string,
+  mode: "login" | "register",
+) {
+  const existing = await getDb()
+    .prepare(
+      `select id, email
+       from users
+       where barber_shop_id = ? and (google_sub = ? or lower(email) = ?) and active = 1
+       limit 1`,
+    )
+    .bind(barberShopId, googleSub, email)
+    .first<{ id: string; email: string }>();
+
+  if (existing) {
+    await getDb().prepare("update users set google_sub = ? where id = ? and google_sub is null").bind(googleSub, existing.id).run();
+    return existing;
+  }
+
+  if (mode === "login") {
+    throw new Error("Conta Google nao encontrada. Use Inscrever-se primeiro.");
+  }
+
+  const userId = createId("user");
+  const clientId = createId("client");
+  const salt = createToken();
+  const passwordHash = await hashPassword(createToken(), salt);
+  await getDb().batch([
+    getDb()
+      .prepare(
+        `insert into users
+         (id, barber_shop_id, name, email, phone, role, password_salt, password_hash, active, two_factor_enabled, two_factor_channel, google_sub)
+         values (?, ?, ?, ?, null, 'client', ?, ?, 1, 1, 'totp', ?)`,
+      )
+      .bind(userId, barberShopId, name.trim() || email, email, salt, passwordHash, googleSub),
+    getDb()
+      .prepare(
+        `insert into clients (id, barber_shop_id, user_id, name, phone, email, notes, preferences, active)
+         values (?, ?, ?, ?, ?, ?, ?, null, 1)`,
+      )
+      .bind(clientId, barberShopId, userId, name.trim() || email, "", email, "Criado pelo cadastro com Google."),
+  ]);
+
+  return { id: userId, email };
 }
 
 export async function logout(request: Request) {
@@ -1171,8 +1339,33 @@ async function createTwoFactorChallenge(
   email: string,
   purpose: "login" | "register" | "google",
 ): Promise<TwoFactorChallenge> {
+  const user = await getDb()
+    .prepare(
+      `select u.email, u.two_factor_secret, u.two_factor_confirmed_at, b.name as barber_shop_name
+       from users u
+       join barber_shops b on b.id = u.barber_shop_id
+       where u.id = ? and u.active = 1
+       limit 1`,
+    )
+    .bind(userId)
+    .first<{
+      email: string;
+      two_factor_secret: string | null;
+      two_factor_confirmed_at: string | null;
+      barber_shop_name: string;
+    }>();
+  if (!user) throw new Error("Conta indisponivel.");
+
+  let secret = user.two_factor_secret;
+  if (!secret) {
+    secret = createTotpSecret();
+    await getDb()
+      .prepare("update users set two_factor_secret = ?, two_factor_channel = 'totp' where id = ?")
+      .bind(secret, userId)
+      .run();
+  }
+
   const challengeId = createId("2fa");
-  const code = createSixDigitCode();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 10).toISOString();
 
   await getDb()
@@ -1190,29 +1383,115 @@ async function createTwoFactorChallenge(
        (id, barber_shop_id, user_id, purpose, code_hash, expires_at, consumed_at)
        values (?, ?, ?, ?, ?, ?, null)`,
     )
-    .bind(challengeId, barberShopId, userId, purpose, await sha256Hex(`${challengeId}:${code}`), expiresAt)
+    .bind(challengeId, barberShopId, userId, purpose, "totp", expiresAt)
     .run();
 
-  return {
+  return formatTotpChallenge({
     challengeId,
     expiresAt,
-    channel: "email",
-    deliveryTarget: maskEmail(email),
-    devCode: code,
+    email: user.email || email,
+    shopName: user.barber_shop_name,
+    secret,
+    confirmed: Boolean(user.two_factor_confirmed_at),
+  });
+}
+
+function formatTotpChallenge(input: {
+  challengeId: string;
+  expiresAt: string;
+  email: string;
+  shopName: string;
+  secret: string;
+  confirmed: boolean;
+}): TwoFactorChallenge {
+  const issuer = "Rosa do Corte";
+  const account = `${input.shopName}:${input.email}`;
+  const setupUri = `otpauth://totp/${encodeURIComponent(account)}?${new URLSearchParams({
+    secret: input.secret,
+    issuer,
+    algorithm: "SHA1",
+    digits: "6",
+    period: "30",
+  }).toString()}`;
+
+  return {
+    challengeId: input.challengeId,
+    expiresAt: input.expiresAt,
+    channel: "authenticator",
+    deliveryTarget: "app autenticador",
+    setupRequired: !input.confirmed,
+    setupSecret: input.confirmed ? undefined : input.secret,
+    setupUri: input.confirmed ? undefined : setupUri,
   };
 }
 
-function createSixDigitCode() {
-  const value = new Uint32Array(1);
-  crypto.getRandomValues(value);
-  return String(value[0] % 1_000_000).padStart(6, "0");
+function createTotpSecret() {
+  const bytes = new Uint8Array(20);
+  crypto.getRandomValues(bytes);
+  return base32Encode(bytes);
 }
 
-function maskEmail(email: string) {
-  const [name, domain] = email.split("@");
-  if (!domain) return email;
-  const visible = name.slice(0, 2);
-  return `${visible}${"*".repeat(Math.max(2, name.length - visible.length))}@${domain}`;
+async function verifyTotpCode(secret: string, code: string) {
+  const nowStep = Math.floor(Date.now() / 30_000);
+  for (const drift of [-1, 0, 1]) {
+    const expected = await totpCode(secret, nowStep + drift);
+    if (timingSafeEqual(expected, code)) return true;
+  }
+  return false;
+}
+
+async function totpCode(secret: string, counter: number) {
+  const key = await crypto.subtle.importKey("raw", base32Decode(secret), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const counterBytes = new ArrayBuffer(8);
+  const view = new DataView(counterBytes);
+  view.setUint32(0, Math.floor(counter / 0x100000000));
+  view.setUint32(4, counter >>> 0);
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, counterBytes));
+  const offset = signature[signature.length - 1] & 0x0f;
+  const binary =
+    ((signature[offset] & 0x7f) << 24) |
+    ((signature[offset + 1] & 0xff) << 16) |
+    ((signature[offset + 2] & 0xff) << 8) |
+    (signature[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, "0");
+}
+
+function base32Encode(bytes: Uint8Array) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0;
+  let value = 0;
+  let output = "";
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += alphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) {
+    output += alphabet[(value << (5 - bits)) & 31];
+  }
+  return output;
+}
+
+function base32Decode(value: string) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const clean = value.replace(/=+$/g, "").replace(/\s/g, "").toUpperCase();
+  let bits = 0;
+  let buffer = 0;
+  const bytes: number[] = [];
+  for (const char of clean) {
+    const index = alphabet.indexOf(char);
+    if (index < 0) throw new Error("Chave 2FA invalida.");
+    buffer = (buffer << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((buffer >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(bytes);
 }
 
 function createToken() {
@@ -1268,6 +1547,11 @@ function base64Url(bytes: Uint8Array) {
 
 function base64UrlString(value: string) {
   return btoa(value).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function base64UrlDecodeString(value: string) {
+  const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return atob(padded);
 }
 
 export function todayInSaoPaulo() {

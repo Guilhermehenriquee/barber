@@ -30,6 +30,20 @@ Configuracao recomendada:
 
 O arquivo `render.yaml` ja declara essa configuracao como Web Service.
 
+## Autenticacao
+
+- Login e cadastro passam por 2FA obrigatorio.
+- O 2FA usa TOTP, compativel com Google Authenticator, Authy e Microsoft Authenticator.
+- No primeiro acesso, o app mostra a chave de configuracao do autenticador.
+- Depois disso, a conta so entra com senha + codigo do app autenticador.
+
+Para ativar Google OAuth real no botao **Inscrever-se com Google**, configure no
+ambiente do Render:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI` opcional; padrao: `/api/auth/google/callback` no proprio dominio
+
 ## Estrutura
 
 - edit site code under `app/`

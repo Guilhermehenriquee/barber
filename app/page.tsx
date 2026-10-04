@@ -12,9 +12,11 @@ type AuthMode = "login" | "register";
 type PendingChallenge = {
   challengeId: string;
   expiresAt: string;
-  channel: "email";
+  channel: "authenticator";
   deliveryTarget: string;
-  devCode: string;
+  setupRequired: boolean;
+  setupSecret?: string;
+  setupUri?: string;
 };
 
 type User = {
@@ -202,13 +204,16 @@ const copy = {
     },
     twoFactor: {
       eyebrow: "Verificação 2FA",
-      title: "Confirme o código para entrar.",
-      description: "Enviamos um código para",
+      title: "Confirme o código do autenticador.",
+      description: "Abra seu app autenticador para",
+      setupTitle: "Configure seu app autenticador",
+      setupDescription: "Adicione esta chave no Google Authenticator, Authy ou Microsoft Authenticator e digite o código gerado.",
+      secretLabel: "Chave de configuração",
+      uriLabel: "URI para importar",
       code: "Código de 6 dígitos",
       submit: "Verificar e entrar",
       back: "Trocar conta",
-      devCode: "Código de demonstração",
-      sent: "Código 2FA gerado. Confirme para concluir o acesso.",
+      sent: "2FA iniciado. Confirme o código do app autenticador para concluir o acesso.",
     },
     home: {
       newAppointment: "Novo agendamento",
@@ -382,13 +387,16 @@ const copy = {
     },
     twoFactor: {
       eyebrow: "2FA verification",
-      title: "Confirm the code to continue.",
-      description: "We sent a code to",
+      title: "Confirm your authenticator code.",
+      description: "Open your authenticator app for",
+      setupTitle: "Set up your authenticator app",
+      setupDescription: "Add this key to Google Authenticator, Authy, or Microsoft Authenticator, then enter the generated code.",
+      secretLabel: "Setup key",
+      uriLabel: "Import URI",
       code: "6-digit code",
       submit: "Verify and enter",
       back: "Use another account",
-      devCode: "Demo code",
-      sent: "2FA code generated. Confirm it to finish access.",
+      sent: "2FA started. Confirm the authenticator code to finish access.",
     },
     home: {
       newAppointment: "New appointment",
@@ -544,6 +552,29 @@ export default function Home() {
     void loadWorkspace();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, slug]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const challengeId = params.get("authChallenge");
+    if (!challengeId) return;
+
+    void Promise.resolve().then(() => {
+      setSection("login");
+      setAuthBusy(true);
+      void fetch(`/api/auth/2fa/challenge?id=${encodeURIComponent(challengeId)}`)
+        .then(async (response) => {
+          const data = (await response.json()) as { challenge?: PendingChallenge; error?: string };
+          if (!response.ok || !data.challenge) throw new Error(data.error || "Falha ao carregar 2FA.");
+          setPendingChallenge(data.challenge);
+          setTwoFactorCode("");
+          window.history.replaceState(null, "", window.location.pathname);
+        })
+        .catch((error) => {
+          setMessage(error instanceof Error ? error.message : "Falha ao carregar 2FA.");
+        })
+        .finally(() => setAuthBusy(false));
+    });
+  }, []);
 
   useEffect(() => {
     if (selectedServiceId) {
@@ -927,11 +958,26 @@ export default function Home() {
                 <form className="two-factor-card" onSubmit={handleVerifyTwoFactor}>
                   <div>
                     <p className="eyebrow">{t.twoFactor.eyebrow}</p>
-                    <h3>{t.twoFactor.title}</h3>
+                    <h3>{pendingChallenge.setupRequired ? t.twoFactor.setupTitle : t.twoFactor.title}</h3>
                     <p>
-                      {t.twoFactor.description} <strong>{pendingChallenge.deliveryTarget}</strong>.
+                      {pendingChallenge.setupRequired ? t.twoFactor.setupDescription : t.twoFactor.description}{" "}
+                      {!pendingChallenge.setupRequired && <strong>{pendingChallenge.deliveryTarget}</strong>}
                     </p>
                   </div>
+                  {pendingChallenge.setupRequired && pendingChallenge.setupSecret && (
+                    <div className="setup-stack">
+                      <div className="setup-secret">
+                        <span>{t.twoFactor.secretLabel}</span>
+                        <strong>{pendingChallenge.setupSecret}</strong>
+                      </div>
+                      {pendingChallenge.setupUri && (
+                        <label>
+                          {t.twoFactor.uriLabel}
+                          <input readOnly value={pendingChallenge.setupUri} onFocus={(event) => event.currentTarget.select()} />
+                        </label>
+                      )}
+                    </div>
+                  )}
                   <label>
                     {t.twoFactor.code}
                     <input
@@ -942,10 +988,6 @@ export default function Home() {
                       onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                     />
                   </label>
-                  <div className="dev-code">
-                    <span>{t.twoFactor.devCode}</span>
-                    <strong>{pendingChallenge.devCode}</strong>
-                  </div>
                   <button className="primary-button wide" type="submit" disabled={authBusy || twoFactorCode.length !== 6}>
                     {t.twoFactor.submit}
                   </button>
