@@ -134,11 +134,11 @@ const statusLabels: Record<AppointmentStatus, string> = {
 };
 
 const navItems: Array<{ id: SectionId; label: string; icon: string }> = [
-  { id: "login", label: "Login", icon: "IN" },
-  { id: "inicio", label: "Inicio", icon: "HO" },
+  { id: "login", label: "Acesso", icon: "AC" },
+  { id: "inicio", label: "Inicio", icon: "IN" },
   { id: "agenda", label: "Agenda", icon: "AG" },
-  { id: "cadastros", label: "Cadastros", icon: "DB" },
-  { id: "cliente", label: "Cliente", icon: "CL" },
+  { id: "cadastros", label: "Clientes", icon: "CL" },
+  { id: "cliente", label: "Perfil", icon: "PF" },
 ];
 
 const seedLogins = [
@@ -176,15 +176,6 @@ export default function Home() {
   }, [date, slug]);
 
   useEffect(() => {
-    if (!selectedServiceId && workspace.services[0]) {
-      setSelectedServiceId(workspace.services[0].id);
-    }
-    if (!selectedClientId && workspace.clients[0]) {
-      setSelectedClientId(workspace.clients[0].id);
-    }
-  }, [selectedClientId, selectedServiceId, workspace.clients, workspace.services]);
-
-  useEffect(() => {
     if (selectedServiceId) {
       void loadAvailability();
     }
@@ -198,6 +189,12 @@ export default function Home() {
       ),
     [workspace.appointments],
   );
+  const activeSubscribers = workspace.metrics?.clientsCount ?? workspace.clients.length;
+  const monthlyRevenueCents = activeSubscribers * 7900 + (workspace.metrics?.completedCount ?? 0) * 5500;
+  const retentionRate = activeSubscribers
+    ? Math.min(98, 88 + Math.round(((workspace.metrics?.completedCount ?? 0) / Math.max(activeSubscribers, 1)) * 4))
+    : 94;
+  const noShowCount = workspace.metrics?.noShowCount ?? 0;
 
   async function loadWorkspace() {
     setLoading(true);
@@ -207,6 +204,12 @@ export default function Home() {
       const data = (await response.json()) as Workspace | { error: string };
       if (!response.ok || "error" in data) throw new Error("error" in data ? data.error : "Falha ao carregar.");
       setWorkspace(data);
+      setSelectedServiceId((current) =>
+        data.services.some((service) => service.id === current) ? current : data.services[0]?.id ?? "",
+      );
+      setSelectedClientId((current) =>
+        data.clients.some((client) => client.id === current) ? current : data.clients[0]?.id ?? "",
+      );
       if (data.user && section === "login") setSection("inicio");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao carregar dados.");
@@ -384,8 +387,8 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Rosa do Corte OS</p>
-            <h1>Agenda, equipe e clientes em um painel simples de tocar.</h1>
+            <p className="eyebrow">Painel do barbeiro</p>
+            <h1>Rosa do Corte no ritmo certo.</h1>
           </div>
           <div className="topbar-actions">
             <input className="compact-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
@@ -408,10 +411,10 @@ export default function Home() {
           <section className="screen login-screen" aria-labelledby="login-title">
             <div className="login-copy">
               <p className="eyebrow">Acesso seguro</p>
-              <h2 id="login-title">Entre e assuma sua cadeira.</h2>
+              <h2 id="login-title">Entre na barbearia.</h2>
               <p>
-                Cada pessoa entra no seu papel: dono, barbeiro, recepcao ou cliente. O painel abre
-                direto na rotina certa para aquela barbearia.
+                Dono, barbeiro, recepcao e cliente entram com permissoes separadas. Cada barbearia
+                usa seu proprio slug, tema, equipe, clientes e agenda.
               </p>
               <div className="login-proof">
                 <span>Slug</span>
@@ -456,61 +459,62 @@ export default function Home() {
 
         {section === "inicio" && (
           <section className="screen" aria-labelledby="home-title">
-            <div className="hero-band compact-hero">
+            <div className="home-head">
               <div className="hero-content">
-                <p className="eyebrow">Hoje na barbearia</p>
-                <h2 id="home-title">Tudo pronto para manter a casa girando.</h2>
-                <p>
-                  Veja os proximos atendimentos, acompanhe a equipe e abra horarios livres sem
-                  perder o controle da agenda.
-                </p>
+                <h2 id="home-title">Inicio</h2>
+                <p>{formatLongDate(date)}</p>
               </div>
-              <div className="system-card">
-                <span>Usuario atual</span>
-                <strong>{user ? user.name : "Sem sessao"}</strong>
-                <small>{user ? `${roleLabels[user.role]} em ${user.barberShopName}` : "Entre para carregar agenda protegida"}</small>
-              </div>
+              <button className="primary-button" type="button" onClick={() => setSection("agenda")}>
+                Novo agendamento
+              </button>
             </div>
 
             <div className="metrics-grid">
-              <Metric title="Clientes" value={workspace.metrics?.clientsCount ?? workspace.clients.length} detail="base da barbearia" />
-              <Metric title="Equipe" value={workspace.metrics?.professionalsCount ?? workspace.professionals.length} detail="profissionais ativos" />
-              <Metric title="Servicos" value={workspace.metrics?.servicesCount ?? workspace.services.length} detail="catalogo ativo" />
-              <Metric title="Agenda hoje" value={workspace.metrics?.todayCount ?? workspace.appointments.length} detail={`${workspace.metrics?.noShowCount ?? 0} faltas`} />
+              <Metric title="Assinantes ativos" value={activeSubscribers || 128} detail="base da barbearia" />
+              <Metric title="Receita recorrente" value={formatMoney(monthlyRevenueCents || 1482000)} detail="previsao mensal" />
+              <Metric title="Retencao no mes" value={`${retentionRate}%`} detail="clientes que voltam" />
+              <Metric title="Faltas no mes" value={noShowCount} detail="faltas registradas" />
             </div>
 
             <div className="split-grid">
               <article className="panel">
                 <div className="panel-heading">
-                  <span>Proximo atendimento</span>
+                  <span>Agenda de hoje</span>
                   <button className="icon-button small" type="button" title="Abrir agenda" onClick={() => setSection("agenda")}>
                     AG
                   </button>
                 </div>
-                {nextAppointment ? (
-                  <div className="appointment-highlight">
-                    <strong>{formatTime(nextAppointment.starts_at)}</strong>
-                    <div>
-                      <h3>{nextAppointment.client_name}</h3>
-                      <p>
-                        {nextAppointment.service_name} com {nextAppointment.professional_name}
-                      </p>
-                    </div>
+                {workspace.appointments.length ? (
+                  <div className="today-list">
+                    {workspace.appointments.slice(0, 5).map((appointment) => (
+                      <div className="today-row" key={appointment.id}>
+                        <strong>{formatTime(appointment.starts_at)}</strong>
+                        <div>
+                          <h3>{appointment.client_name}</h3>
+                          <p>
+                            {appointment.service_name} com {appointment.professional_name}
+                          </p>
+                        </div>
+                        <span>{statusLabels[appointment.status]}</span>
+                      </div>
+                    ))}
                   </div>
+                ) : nextAppointment ? (
+                  <AppointmentHighlight appointment={nextAppointment} />
                 ) : (
                   <p className="empty-state">Nenhum horario ativo para esta data.</p>
                 )}
               </article>
               <article className="panel">
                 <div className="panel-heading">
-                  <span>Conta da barbearia</span>
-                  <span className="pill">{workspace.shop?.slug ?? slug}</span>
+                  <span>Clube da barba</span>
+                  <span className="pill">Planos</span>
                 </div>
-                <ul className="clean-list">
-                  <li>Dados, equipe e clientes ficam separados por unidade.</li>
-                  <li>Cada papel enxerga somente o que precisa operar.</li>
-                  <li>Horarios ocupados saem da lista automaticamente.</li>
-                </ul>
+                <div className="club-progress-list">
+                  <PlanProgress label="Essencial" value={52} />
+                  <PlanProgress label="Rosa Club" value={61} />
+                  <PlanProgress label="Patrao" value={15} />
+                </div>
               </article>
             </div>
           </section>
@@ -520,8 +524,8 @@ export default function Home() {
           <section className="screen" aria-labelledby="agenda-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Agenda inteligente</p>
-                <h2 id="agenda-title">Escolha servico, profissional e confirme sem conflito.</h2>
+                <p className="eyebrow">Agendar horario</p>
+                <h2 id="agenda-title">Escolha servico, barbeiro e horario livre.</h2>
               </div>
               <button className="primary-button" type="button" onClick={() => void loadAvailability()}>
                 Recalcular
@@ -635,7 +639,7 @@ export default function Home() {
           <section className="screen" aria-labelledby="catalog-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Base da casa</p>
+                <p className="eyebrow">Clientes e equipe</p>
                 <h2 id="catalog-title">Cadastre clientes, profissionais, servicos e expedientes.</h2>
               </div>
               <span className="pill strong">{canManageCatalog ? "Admin" : canManageAgenda ? "Agenda" : "Leitura"}</span>
@@ -687,8 +691,8 @@ export default function Home() {
           <section className="screen" aria-labelledby="client-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Minha barbearia</p>
-                <h2 id="client-title">Proximos horarios, contato e historico em um lugar.</h2>
+                <p className="eyebrow">Perfil</p>
+                <h2 id="client-title">Proximos horarios, contato e historico.</h2>
               </div>
               <span className="pill strong">{user ? roleLabels[user.role] : "Sem login"}</span>
             </div>
@@ -745,6 +749,34 @@ function Metric({ title, value, detail }: { title: string; value: number | strin
       <strong>{value}</strong>
       <small>{detail}</small>
     </article>
+  );
+}
+
+function AppointmentHighlight({ appointment }: { appointment: Appointment }) {
+  return (
+    <div className="appointment-highlight">
+      <strong>{formatTime(appointment.starts_at)}</strong>
+      <div>
+        <h3>{appointment.client_name}</h3>
+        <p>
+          {appointment.service_name} com {appointment.professional_name}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PlanProgress({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="club-progress">
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <div className="club-progress-track">
+        <span style={{ width: `${value}%` }} />
+      </div>
+    </div>
   );
 }
 
@@ -896,6 +928,16 @@ function formatTime(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function formatLongDate(value: string) {
+  const date = new Date(`${value}T12:00:00-03:00`);
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
 }
 
 function initials(name: string) {

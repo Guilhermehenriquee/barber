@@ -29,9 +29,9 @@ test("server-renders the Rosa do Corte app shell", async () => {
 
   const html = await response.text();
   assert.match(html, /Rosa do Corte \| Clube &amp; Agenda/);
-  assert.match(html, /Rosa do Corte OS/);
+  assert.match(html, /Painel do barbeiro/);
   assert.match(html, /Acesso seguro/);
-  assert.match(html, /Agenda, equipe e clientes/);
-  assert.match(html, /Cadastros/);
+  assert.match(html, /Rosa do Corte no ritmo certo/);
+  assert.match(html, /Clientes/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton|codex-preview/i);
 });
