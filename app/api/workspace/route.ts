@@ -3,9 +3,12 @@ import { getSessionUser, getWorkspace, jsonError, todayInSaoPaulo } from "@/app/
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const slug = url.searchParams.get("slug") || "rosa-do-corte";
     const date = url.searchParams.get("date") || todayInSaoPaulo();
     const user = await getSessionUser(request);
+    const slug = url.searchParams.get("slug") || user?.barberShopSlug;
+    if (!slug) {
+      return Response.json({ shop: null, user: null, services: [], professionals: [], clients: [], appointments: [], workingHours: [], metrics: null });
+    }
     const workspace = await getWorkspace(slug, user, date);
     return Response.json(workspace);
   } catch (error) {

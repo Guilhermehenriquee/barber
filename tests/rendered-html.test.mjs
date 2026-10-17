@@ -22,13 +22,13 @@ async function render(path = "/") {
   );
 }
 
-test("server-renders the Rosa do Corte secure access screen", async () => {
+test("server-renders the Gestão do Corte secure access screen", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /Rosa do Corte \| Clube &amp; Agenda/);
+  assert.match(html, /Gestão do Corte \| Clube &amp; Agenda/);
   assert.match(html, /Acesso seguro/);
   assert.match(html, /Idioma/);
   assert.match(html, /Português/);

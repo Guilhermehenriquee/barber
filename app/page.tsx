@@ -170,6 +170,7 @@ const copy = {
       leave: "Sair",
       loading: "Carregando dados reais...",
       noLogin: "Sem login",
+      or: "ou",
       roleLogged: "logado",
       waitingLogin: "Aguardando login",
       barberShop: "Barbearia",
@@ -180,7 +181,7 @@ const copy = {
     },
     topbar: {
       eyebrow: "Painel do barbeiro",
-      title: "Rosa do Corte no ritmo certo.",
+      title: "Gestão do Corte",
     },
     login: {
       eyebrow: "Acesso seguro",
@@ -198,9 +199,13 @@ const copy = {
       confirmPassword: "Confirmar senha",
       submit: "Acessar",
       registerSubmit: "Criar conta",
+      googleLoginSubmit: "Entrar com Google",
       googleSubmit: "Inscrever-se com Google",
       googleHint: "O Google OAuth fica disponível assim que as credenciais forem configuradas no ambiente.",
       demoAccess: "Acessos de demonstração",
+      formLoginTitle: "Acesse sua agenda",
+      formRegisterTitle: "Crie sua conta",
+      secureNote: "Senha e 2FA obrigatório para todos os papéis.",
     },
     twoFactor: {
       eyebrow: "Verificação 2FA",
@@ -228,7 +233,7 @@ const copy = {
       noActive: "Nenhum horário ativo para esta data.",
       clubTitle: "Clube da barba",
       plans: "Planos",
-      planNames: ["Essencial", "Rosa Club", "Patrão"],
+      planNames: ["Essencial", "Clube", "Patrão"],
       clientTitle: "Minha agenda",
       clientSubtitle: "Acompanhe seus próximos horários, histórico e serviços disponíveis.",
       clientNext: "Próximo horário",
@@ -360,6 +365,7 @@ const copy = {
       leave: "Sign out",
       loading: "Loading live data...",
       noLogin: "Signed out",
+      or: "or",
       roleLogged: "signed in",
       waitingLogin: "Waiting for sign-in",
       barberShop: "Barbershop",
@@ -370,7 +376,7 @@ const copy = {
     },
     topbar: {
       eyebrow: "Barber dashboard",
-      title: "Rosa do Corte, running on schedule.",
+      title: "Gestão do Corte",
     },
     login: {
       eyebrow: "Secure access",
@@ -388,9 +394,13 @@ const copy = {
       confirmPassword: "Confirm password",
       submit: "Sign in",
       registerSubmit: "Create account",
+      googleLoginSubmit: "Sign in with Google",
       googleSubmit: "Sign up with Google",
       googleHint: "Google OAuth becomes available as soon as credentials are configured in the environment.",
       demoAccess: "Demo access",
+      formLoginTitle: "Access your schedule",
+      formRegisterTitle: "Create your account",
+      secureNote: "Password and mandatory 2FA for every role.",
     },
     twoFactor: {
       eyebrow: "2FA verification",
@@ -418,7 +428,7 @@ const copy = {
       noActive: "No active appointments for this date.",
       clubTitle: "Beard club",
       plans: "Plans",
-      planNames: ["Essential", "Rosa Club", "Patron"],
+      planNames: ["Essential", "Club", "Patron"],
       clientTitle: "My schedule",
       clientSubtitle: "Follow your upcoming appointments, history and available services.",
       clientNext: "Next appointment",
@@ -521,12 +531,6 @@ const navItems: Array<{ id: SectionId; icon: string }> = [
   { id: "cliente", icon: "PF" },
 ];
 
-const seedLogins = [
-  { role: "owner" as const, email: "admin@rosadocorte.com.br", password: "rosa-admin" },
-  { role: "barber" as const, email: "rosa@rosadocorte.com.br", password: "rosa-barbeiro" },
-  { role: "reception" as const, email: "recepcao@rosadocorte.com.br", password: "rosa-recepcao" },
-  { role: "client" as const, email: "cliente@rosadocorte.com.br", password: "rosa-cliente" },
-];
 
 function canAccessSection(id: SectionId, user: User) {
   if (id === "cadastros") return ["owner", "admin", "reception", "barber"].includes(user.role);
@@ -536,15 +540,15 @@ function canAccessSection(id: SectionId, user: User) {
 export default function Home() {
   const [locale, setLocale] = useState<Locale>("pt-BR");
   const [section, setSection] = useState<SectionId>("inicio");
-  const [slug, setSlug] = useState("rosa-do-corte");
+  const [slug, setSlug] = useState("");
   const [date, setDate] = useState(todayInputValue());
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authBusy, setAuthBusy] = useState(false);
-  const [loginEmail, setLoginEmail] = useState("admin@rosadocorte.com.br");
-  const [loginPassword, setLoginPassword] = useState("rosa-admin");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPhone, setRegisterPhone] = useState("");
@@ -625,6 +629,7 @@ export default function Home() {
       const data = (await response.json()) as Workspace | { error: string };
       if (!response.ok || "error" in data) throw new Error("error" in data ? data.error : t.messages.loadFail);
       setWorkspace(data);
+      if (!slug && data.user) setSlug(data.user.barberShopSlug);
       setSelectedServiceId((current) =>
         data.services.some((service) => service.id === current) ? current : data.services[0]?.id ?? "",
       );
@@ -864,10 +869,10 @@ export default function Home() {
       <header className="auth-topbar">
         <div className="brand auth-brand">
           <span className="brand-mark" aria-hidden="true">
-            RC
+            GC
           </span>
           <span>
-            <strong>{workspace.shop?.name ?? "Rosa do Corte"}</strong>
+            <strong>Gestão do Corte</strong>
             <small>{workspace.shop?.slug ?? slug}</small>
           </span>
         </div>
@@ -895,6 +900,25 @@ export default function Home() {
             </div>
           </div>
           <div className="login-form">
+            <div className="auth-form-heading">
+              <span className="auth-card-logo" aria-hidden="true">
+                GC
+              </span>
+              <div>
+                <p className="eyebrow">Gestão do Corte</p>
+                <h3>
+                  {pendingChallenge
+                    ? pendingChallenge.setupRequired
+                      ? t.twoFactor.setupTitle
+                      : t.twoFactor.title
+                    : authMode === "login"
+                      ? t.login.formLoginTitle
+                      : t.login.formRegisterTitle}
+                </h3>
+                <p>{pendingChallenge ? t.twoFactor.sent : t.login.secureNote}</p>
+              </div>
+            </div>
+
             {!pendingChallenge && (
               <div className="auth-switch" role="tablist" aria-label={t.login.eyebrow}>
                 <button
@@ -992,22 +1016,13 @@ export default function Home() {
                 <button className="primary-button wide" type="submit" disabled={authBusy}>
                   {t.login.submit}
                 </button>
-                <div className="credential-grid" aria-label={t.login.demoAccess}>
-                  {seedLogins.map(({ role, email, password }) => (
-                    <button
-                      className="credential-card"
-                      key={email}
-                      type="button"
-                      onClick={() => {
-                        setLoginEmail(email);
-                        setLoginPassword(password);
-                      }}
-                    >
-                      <strong>{t.seedRoles[role]}</strong>
-                      <span>{email}</span>
-                    </button>
-                  ))}
+                <div className="auth-divider">
+                  <span>{t.common.or}</span>
                 </div>
+                <button className="google-button" type="button" onClick={handleGoogleStart} disabled={authBusy}>
+                  <span aria-hidden="true">G</span>
+                  {t.login.googleLoginSubmit}
+                </button>
               </form>
             ) : (
               <form className="auth-form" onSubmit={handleRegister}>
@@ -1072,10 +1087,10 @@ export default function Home() {
       <aside className="sidebar" aria-label={locale === "pt-BR" ? "Navegação principal" : "Main navigation"}>
         <button className="brand" type="button" onClick={() => setSection("inicio")}>
           <span className="brand-mark" aria-hidden="true">
-            RC
+            GC
           </span>
           <span>
-            <strong>{workspace.shop?.name ?? "Rosa do Corte"}</strong>
+            <strong>Gestão do Corte</strong>
             <small>{workspace.shop?.slug ?? slug}</small>
           </span>
         </button>

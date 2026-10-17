@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const title = "Rosa do Corte | Clube & Agenda";
+const title = "Gestão do Corte | Clube & Agenda";
 const description =
   "Sistema web multi-barbearia com login por papel, banco isolado, agenda real, cadastros e área do cliente.";
 
 export const metadata: Metadata = {
   title,
   description,
-  metadataBase: new URL("https://rosa-do-corte.sites.openai.com"),
   openGraph: {
     title,
     description,

@@ -4,5 +4,5 @@
   <path d="M24 56L56 24" stroke="#DC9AAA" stroke-width="9"/>
   <path d="M8 39L39 8" stroke="#FFF9F8" stroke-width="7"/>
   <rect x="10" y="10" width="44" height="44" rx="10" stroke="#BF8B3F" stroke-width="3"/>
-  <text x="32" y="39" text-anchor="middle" font-family="Georgia, serif" font-size="18" font-weight="700" fill="#FFF9F8">RC</text>
+  <text x="32" y="39" text-anchor="middle" font-family="Georgia, serif" font-size="18" font-weight="700" fill="#FFF9F8">GC</text>
 </svg>

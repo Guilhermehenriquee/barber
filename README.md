@@ -1,4 +1,4 @@
-# Rosa do Corte
+# Gestão do Corte
 
 Sistema web multi-barbearia para login por papel, cadastros e agenda real.
 O app roda com [vinext](https://github.com/cloudflare/vinext), APIs server-side,
